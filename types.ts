@@ -57,6 +57,16 @@ export interface PaymentInput {
   notes?: string;
 }
 
+// Nova interface para itens individuais
+export interface ServiceItem {
+  id: string;
+  description: string;
+  type: 'PART' | 'LABOR'; // Peça ou Mão de Obra
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number; // quantity * unitPrice
+}
+
 export interface ServiceOrder {
   id: string;
   customerName: string;
@@ -73,6 +83,7 @@ export interface ServiceOrder {
   // Execution
   mechanicNotes?: string;
   assignedMechanicId?: string;
+  items?: ServiceItem[]; // Lista detalhada de serviços executados
   
   // Financial
   partsCost: number;
@@ -99,6 +110,7 @@ export interface AuditLogEntry {
   userName: string;
   timestamp: string;
   details: string;
+  snapshot?: ServiceOrder; // UC004: Snapshot for Audit/Recovery
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OS_LIST' | 'NEW_OS' | 'OS_DETAILS' | 'AI_CHAT' | 'REPORTS';

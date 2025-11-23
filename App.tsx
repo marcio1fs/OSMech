@@ -35,7 +35,13 @@ import {
   Bell,
   ExternalLink,
   Copy,
-  Wallet
+  Wallet,
+  Printer,
+  FileText,
+  TrendingUp,
+  Database,
+  Plus,
+  MinusCircle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -50,7 +56,8 @@ import {
     AuditLogEntry, 
     CustomerNotification,
     CreateOSInput,
-    PaymentInput 
+    PaymentInput,
+    ServiceItem 
 } from './types';
 import { getMechanicDiagnosis, getShopAssistantChat } from './services/geminiService';
 import { Card, StatCard } from './components/Card';
@@ -76,6 +83,13 @@ const INITIAL_DATA: ServiceOrder[] = [
     status: OSStatus.PAID,
     assignedMechanicId: 'u2',
     acceptsNotifications: true,
+    // Items populated manually to match costs
+    items: [
+        { id: '1', description: 'Diagnóstico Scanner Diesel', type: 'LABOR', quantity: 1, unitPrice: 150, totalPrice: 150 },
+        { id: '2', description: 'Limpeza Válvula EGR', type: 'LABOR', quantity: 1, unitPrice: 300, totalPrice: 300 },
+        { id: '3', description: 'Filtro de Combustível', type: 'PART', quantity: 1, unitPrice: 150, totalPrice: 150 },
+        { id: '4', description: 'Válvula EGR Nova', type: 'PART', quantity: 1, unitPrice: 1050, totalPrice: 1050 },
+    ],
     partsCost: 1200,
     laborCost: 450,
     totalCost: 1650,
@@ -107,6 +121,7 @@ const INITIAL_DATA: ServiceOrder[] = [
     status: OSStatus.PENDING,
     assignedMechanicId: 'u3',
     acceptsNotifications: true,
+    items: [],
     partsCost: 0,
     laborCost: 0,
     totalCost: 0,
@@ -122,6 +137,139 @@ const INITIAL_LOGS: AuditLogEntry[] = [
     { id: 'log1', action: 'CREATE', userId: 'u1', userName: 'Roberto (Admin)', timestamp: new Date(Date.now() - 86400000 * 5).toISOString(), details: 'Criou OS-1001' },
     { id: 'log2', action: 'UPDATE', userId: 'u2', userName: 'Carlos (Mecânico)', timestamp: new Date(Date.now() - 86400000 * 4).toISOString(), details: 'Atualizou status OS-1001 para Em Execução' },
 ];
+
+// --- Modals ---
+const PaymentModal = ({ isOpen, onClose, onConfirm, total }: { isOpen: boolean, onClose: () => void, onConfirm: (data: PaymentInput) => void, total: number }) => {
+    const [method, setMethod] = useState<'CREDIT_CARD' | 'DEBIT_CARD' | 'CASH' | 'PIX'>('PIX');
+    const [notes, setNotes] = useState('');
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onConfirm({ method, amount: total, notes });
+        onClose();
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><CreditCard size={18}/> Registrar Pagamento</h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="text-center mb-6">
+                        <p className="text-sm text-slate-500 mb-1">Valor Total</p>
+                        <p className="text-3xl font-bold text-green-600">R$ {total.toFixed(2)}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Método de Pagamento</label>
+                        <select 
+                            className="w-full p-3 border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500"
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value as any)}
+                        >
+                            <option value="PIX">Pix (Instantâneo)</option>
+                            <option value="CREDIT_CARD">Cartão de Crédito</option>
+                            <option value="DEBIT_CARD">Cartão de Débito</option>
+                            <option value="CASH">Dinheiro / Espécie</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Observações (Opcional)</label>
+                        <textarea 
+                            className="w-full p-3 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500"
+                            rows={3}
+                            placeholder="Ex: Parcelado em 3x..."
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                        />
+                    </div>
+
+                    <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2">
+                        <CheckCircle size={18}/> Confirmar Recebimento
+                    </button>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+const ReceiptModal = ({ order, isOpen, onClose }: { order: ServiceOrder, isOpen: boolean, onClose: () => void }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+           <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><FileText size={18}/> Recibo de Serviço</h3>
+           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+        </div>
+        <div id="print-area" className="p-8 space-y-6 bg-white">
+            <div className="text-center border-b-2 border-dashed border-slate-200 pb-6">
+                <div className="flex justify-center mb-2">
+                     <div className="bg-slate-900 p-2 rounded text-white"><Wrench size={24}/></div>
+                </div>
+                <h2 className="font-bold text-xl uppercase tracking-widest text-slate-800">OSMech</h2>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">Gestão de Oficinas Especializadas</p>
+                <p className="text-xs text-slate-400 mt-1">{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
+            </div>
+            
+             <div className="text-sm space-y-1 text-slate-600">
+                <p><strong className="text-slate-800">OS:</strong> #{order.id}</p>
+                <p><strong className="text-slate-800">Cliente:</strong> {order.customerName}</p>
+                <p><strong className="text-slate-800">CPF:</strong> {order.customerCpf || 'N/A'}</p>
+                <p><strong className="text-slate-800">Veículo:</strong> {order.vehicleModel} <span className="text-xs bg-slate-100 px-1 rounded border">{order.plate}</span></p>
+            </div>
+
+            <table className="w-full text-sm">
+                <thead>
+                    <tr className="text-xs text-slate-400 border-b border-slate-100 text-left">
+                        <th className="py-2 font-normal uppercase">Qtd</th>
+                        <th className="py-2 font-normal uppercase">Descrição</th>
+                        <th className="py-2 font-normal uppercase text-right">Total</th>
+                    </tr>
+                </thead>
+                <tbody className="text-slate-700">
+                    {order.items && order.items.length > 0 ? (
+                        order.items.map(item => (
+                            <tr key={item.id} className="border-b border-slate-50 last:border-0">
+                                <td className="py-2">{item.quantity}</td>
+                                <td className="py-2">
+                                    {item.description}
+                                    <span className="text-[10px] ml-2 text-slate-400 border border-slate-200 px-1 rounded uppercase">{item.type === 'PART' ? 'Peça' : 'Serv'}</span>
+                                </td>
+                                <td className="text-right font-mono">R$ {item.totalPrice.toFixed(2)}</td>
+                            </tr>
+                        ))
+                    ) : (
+                        <>
+                            <tr><td className="py-2">1</td><td className="py-2">Mão de Obra (Geral)</td><td className="text-right font-mono">R$ {order.laborCost.toFixed(2)}</td></tr>
+                            <tr><td className="py-2">1</td><td className="py-2">Peças (Geral)</td><td className="text-right font-mono">R$ {order.partsCost.toFixed(2)}</td></tr>
+                        </>
+                    )}
+                    <tr className="font-bold border-t-2 border-slate-800 text-lg"><td colSpan={2} className="py-3">TOTAL</td><td className="text-right py-3">R$ {order.totalCost.toFixed(2)}</td></tr>
+                </tbody>
+            </table>
+
+            <div className="bg-green-50 p-4 rounded-lg text-center border border-green-100">
+                <p className="font-bold text-green-800 text-sm mb-1 flex items-center justify-center gap-1"><CheckCircle size={14}/> PAGAMENTO CONFIRMADO</p>
+                <p className="text-xs text-green-700">Via {order.paymentMethod} em {order.paymentDate ? new Date(order.paymentDate).toLocaleDateString() : '-'}</p>
+            </div>
+            
+            <p className="text-[10px] text-center text-slate-400 pt-4">Obrigado pela preferência!</p>
+        </div>
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+             <button onClick={() => window.print()} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
+                <Printer size={18}/> Imprimir
+            </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -238,8 +386,9 @@ export default function App() {
         currentMileage: input.currentMileage,
         complaint: input.complaint || '',
         status: input.initialStatus || OSStatus.PENDING,
-        aiDiagnosis: input.aiDiagnosis, // UC006: Registrar Diagnóstico
+        aiDiagnosis: input.aiDiagnosis, 
         mechanicNotes: '',
+        items: [], // Start empty, populate later
         laborCost: input.estimatedLaborCost || 0,
         partsCost: input.estimatedPartsCost || 0,
         totalCost: (input.estimatedLaborCost || 0) + (input.estimatedPartsCost || 0),
@@ -300,9 +449,10 @@ export default function App() {
 
   // UC005: registrarPagamento
   const registerPayment = (osId: string, input: PaymentInput) => {
+      let updatedOS: ServiceOrder | null = null;
       setOrders(prev => prev.map(o => {
           if (o.id === osId) {
-              const updated = { 
+              updatedOS = { 
                   ...o, 
                   status: OSStatus.PAID, 
                   paymentMethod: input.method,
@@ -310,27 +460,62 @@ export default function App() {
                   updatedAt: new Date().toISOString() 
               };
                // Generate notification (NF/Receipt)
-               const notification = generateNotification(updated, OSStatus.PAID);
+               const notification = generateNotification(updatedOS, OSStatus.PAID);
                if (notification) {
-                   updated.notifications = [notification, ...(o.notifications || [])];
+                   updatedOS.notifications = [notification, ...(o.notifications || [])];
                }
-               return updated;
+               return updatedOS;
           }
           return o;
       }));
-      const noteDetails = input.notes ? ` Obs: ${input.notes}` : '';
-      addLog('FINANCE', `Recebeu pagamento R$ ${input.amount} (${input.method}) da OS ${osId}.${noteDetails}`, osId);
-  };
-
-  // UC004: excluirOS
-  const deleteServiceOrder = (osId: string, adminPassword: string): boolean => {
-      if (adminPassword !== "admin123") {
-          return false;
+      
+      if(updatedOS && selectedOS?.id === osId) {
+          setSelectedOS(updatedOS);
       }
 
+      const noteDetails = input.notes ? ` Obs: ${input.notes}` : '';
+      addLog('FINANCE', `Recebeu pagamento R$ ${input.amount.toFixed(2)} (${input.method}) da OS ${osId}.${noteDetails}`, osId);
+  };
+
+  // UC004: excluirOS (Secure Deletion Flow)
+  const deleteServiceOrder = (osId: string, adminPassword: string): { success: boolean, logId?: string, error?: string } => {
+      // Passo 1: Re-autenticação
+      if (adminPassword !== "admin123") {
+          return { success: false, error: "Senha de administrador incorreta." };
+      }
+
+      const orderToDelete = orders.find(o => o.id === osId);
+      if (!orderToDelete) {
+          return { success: false, error: "Ordem de serviço não encontrada." };
+      }
+
+      // Passo 2: Validação de Estado (Integridade Financeira)
+      if (orderToDelete.status === OSStatus.PAID) {
+          return { success: false, error: "SEGURANÇA: Não é possível excluir uma OS com status 'Finalizado/Pago' devido à integridade fiscal." };
+      }
+
+      // Passo 3: Snapshot (Auditoria)
+      const snapshot = JSON.parse(JSON.stringify(orderToDelete)) as ServiceOrder;
+
+      // Passo 4: Criação do Log
+      const logId = Math.random().toString(36).substr(2, 9).toUpperCase();
+      const logEntry: AuditLogEntry = {
+          id: logId,
+          action: 'DELETE',
+          userId: user?.id || 'admin',
+          userName: user?.name || 'Admin',
+          timestamp: new Date().toISOString(),
+          targetId: osId,
+          details: `Exclusão Segura da OS ${osId}. Backup (Snapshot) realizado.`,
+          snapshot: snapshot // Attached backup
+      };
+
+      // Passo 5: Exclusão em Lote
       setOrders(prev => prev.filter(o => o.id !== osId));
-      addLog('DELETE', `Exclusão Permanente da OS ${osId}`, osId);
-      return true;
+      setLogs(prev => [logEntry, ...prev]);
+
+      // Passo 6: Retorno
+      return { success: true, logId };
   };
 
   // --- Interaction Helpers ---
@@ -366,10 +551,10 @@ export default function App() {
 
     const monthlyRevenue = orders
       .filter(o => {
-          const d = new Date(o.updatedAt);
-          return (o.status === OSStatus.COMPLETED || o.status === OSStatus.PAID) && 
-                 d.getMonth() === currentMonth && 
-                 d.getFullYear() === currentYear;
+          if (o.status !== OSStatus.PAID && o.status !== OSStatus.COMPLETED) return false;
+          
+          const d = o.paymentDate ? new Date(o.paymentDate) : new Date(o.updatedAt);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
       .reduce((acc, curr) => acc + curr.totalCost, 0);
     
@@ -557,514 +742,84 @@ export default function App() {
     </div>
   );
 
-  const OSListView = () => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedStatuses, setSelectedStatuses] = useState<OSStatus[]>([]);
-    const [mechanicId, setMechanicId] = useState<string>('ALL');
-    const [dateRange, setDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
-    const [isFilterExpanded, setIsFilterExpanded] = useState(false);
-
-    useEffect(() => {
-        if (!isAdmin && user) {
-            setMechanicId(user.id);
-        }
-    }, [user, isAdmin]);
-
-    const setDatePreset = (days: number) => {
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - days);
-        setDateRange({
-            start: start.toISOString().split('T')[0],
-            end: end.toISOString().split('T')[0]
-        });
-    }
-
-    const toggleStatus = (status: OSStatus) => {
-        setSelectedStatuses(prev => 
-            prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]
-        );
-    }
-    
-    const filteredOrders = orders.filter(o => {
-      const term = searchTerm.toLowerCase();
-      const matchesSearch = 
-        o.customerName.toLowerCase().includes(term) ||
-        o.plate.toLowerCase().includes(term) ||
-        o.id.toLowerCase().includes(term) ||
-        (o.customerCpf && o.customerCpf.includes(term));
-      
-      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(o.status);
-      const matchesMechanic = mechanicId === 'ALL' || o.assignedMechanicId === mechanicId;
-
-      const targetDate = new Date(o.createdAt);
-      const start = dateRange.start ? new Date(dateRange.start) : null;
-      const end = dateRange.end ? new Date(dateRange.end) : null;
-      if (end) end.setHours(23, 59, 59);
-
-      const matchesDate = (!start || targetDate >= start) && (!end || targetDate <= end);
-      
-      return matchesSearch && matchesStatus && matchesMechanic && matchesDate;
-    });
-
-    const handleOpenOS = (os: ServiceOrder) => {
-        setSelectedOS(os);
-        setCurrentView('OS_DETAILS');
-    }
-
-    // Call Mutation: excluirOS
-    const handleDelete = (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        if (!isAdmin) {
-            alert("Apenas administradores podem excluir ordens.");
-            return;
-        }
-        
-        const osToDelete = orders.find(o => o.id === id);
-        if (!osToDelete) return;
-
-        if (osToDelete.status === OSStatus.PAID) {
-             alert("ERRO DE SEGURANÇA: Não é possível excluir OS com status 'Finalizado/Pago' para manter a integridade fiscal.");
-             return;
-        }
-
-        const pwd = prompt("ÁREA DE SEGURANÇA (UC004)\n\nDigite a senha de administrador para confirmar a exclusão permanente:");
-        if (pwd) {
-             const success = deleteServiceOrder(id, pwd);
-             if (success) {
-                 alert(`SUCESSO: Ordem de Serviço excluída.`);
-             } else {
-                 alert("Senha incorreta. Ação bloqueada.");
-             }
-        }
-    }
-
-    const handleExport = () => {
-        const header = "ID,Cliente,CPF,Veiculo,Placa,Status,Mecânico,Total,Data\n";
-        const rows = filteredOrders.map(o => {
-            const mech = MOCK_USERS.find(u => u.id === o.assignedMechanicId)?.name || 'N/A';
-            return `${o.id},"${o.customerName}","${o.customerCpf || ''}","${o.vehicleModel}","${o.plate}",${o.status},"${mech}",${o.totalCost},${new Date(o.createdAt).toLocaleDateString()}`
-        }).join("\n");
-        const blob = new Blob([header + rows], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `os_relatorio_${new Date().toISOString().slice(0,10)}.csv`;
-        a.click();
-        addLog('LOGIN', `Exportou lista filtrada de OS.`);
-    }
-
-    return (
-      <div className="space-y-4 animate-fade-in">
-        {/* Advanced Filter Panel */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-           <div className="flex flex-col md:flex-row gap-4 mb-4">
-               {/* Search Bar */}
-               <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Pesquisar por Placa, CPF, Cliente ou ID..." 
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-               </div>
-               
-               {/* Mechanic Filter (Role Aware) */}
-               <div className="relative md:w-64">
-                  <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                  <select 
-                    disabled={!isAdmin}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm appearance-none bg-white disabled:bg-slate-100 disabled:text-slate-500"
-                    value={mechanicId}
-                    onChange={(e) => setMechanicId(e.target.value)}
-                  >
-                      <option value="ALL">Todos os Mecânicos</option>
-                      {MOCK_USERS.filter(u => u.role === 'MECHANIC').map(u => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                  </select>
-               </div>
-
-               <button 
-                 onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm border ${isFilterExpanded ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
-               >
-                  <Filter size={16} /> Filtros Avançados
-               </button>
-
-               <button 
-                onClick={handleExport}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap text-sm border border-slate-200"
-               >
-                 <FileSpreadsheet size={16} /> Exportar
-               </button>
-               <button 
-                onClick={() => setCurrentView('NEW_OS')}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap text-sm"
-               >
-                 <PlusCircle size={16} /> Nova OS
-               </button>
-           </div>
-
-           {/* Expanded Filters */}
-           {isFilterExpanded && (
-               <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-                   {/* Date Filter */}
-                   <div>
-                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 block flex items-center gap-2"><Calendar size={14}/> Período (Abertura)</label>
-                       <div className="flex gap-2 mb-2">
-                           <button onClick={() => setDatePreset(0)} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-600">Hoje</button>
-                           <button onClick={() => setDatePreset(7)} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-600">7 Dias</button>
-                           <button onClick={() => setDatePreset(30)} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-600">30 Dias</button>
-                           <button onClick={() => setDateRange({start: '', end: ''})} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-red-500">Limpar</button>
-                       </div>
-                       <div className="flex gap-2 items-center">
-                           <input type="date" className="text-sm border border-slate-300 rounded p-1" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
-                           <span className="text-slate-400">-</span>
-                           <input type="date" className="text-sm border border-slate-300 rounded p-1" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
-                       </div>
-                   </div>
-
-                   {/* Status Filter (Multiple) */}
-                   <div>
-                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 block flex items-center gap-2"><CheckSquare size={14}/> Status (Múltipla Escolha)</label>
-                       <div className="flex flex-wrap gap-2">
-                           {Object.values(OSStatus).map(status => {
-                               const isSelected = selectedStatuses.includes(status);
-                               return (
-                                   <button 
-                                     key={status}
-                                     onClick={() => toggleStatus(status)}
-                                     className={`text-xs px-2 py-1 rounded-full border transition-all ${
-                                         isSelected 
-                                         ? 'bg-blue-100 border-blue-300 text-blue-700 font-semibold' 
-                                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                     }`}
-                                   >
-                                       {status}
-                                   </button>
-                               )
-                           })}
-                           {selectedStatuses.length > 0 && (
-                               <button onClick={() => setSelectedStatuses([])} className="text-xs px-2 py-1 text-red-500 underline">Limpar</button>
-                           )}
-                       </div>
-                   </div>
-               </div>
-           )}
-        </div>
-
-        {/* List Results */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-slate-600 text-xs uppercase font-semibold tracking-wider">
-                  <th className="p-4 border-b border-slate-100">OS / Data</th>
-                  <th className="p-4 border-b border-slate-100">Veículo / Cliente</th>
-                  <th className="p-4 border-b border-slate-100">Status</th>
-                  <th className="p-4 border-b border-slate-100">Mecânico</th>
-                  <th className="p-4 border-b border-slate-100">Total</th>
-                  {isAdmin && <th className="p-4 border-b border-slate-100 text-right">Ações</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredOrders.map(order => (
-                  <tr key={order.id} onClick={() => handleOpenOS(order)} className="hover:bg-slate-50 transition-colors cursor-pointer group">
-                    <td className="p-4">
-                        <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{order.id}</div>
-                        <div className="text-xs text-slate-500 flex flex-col">
-                            <span>{new Date(order.createdAt).toLocaleDateString()}</span>
-                            <span>{new Date(order.createdAt).toLocaleTimeString().slice(0,5)}</span>
-                        </div>
-                    </td>
-                    <td className="p-4">
-                       <div className="font-medium text-slate-800">{order.vehicleModel}</div>
-                       <div className="flex flex-col gap-0.5 mt-1">
-                           <span className="text-xs text-slate-500 font-mono bg-slate-100 inline-block px-1.5 py-0.5 rounded border border-slate-200 w-fit">{order.plate}</span>
-                           <span className="text-xs text-slate-600 font-medium">{order.customerName}</span>
-                           {order.customerCpf && <span className="text-[10px] text-slate-400">CPF: {order.customerCpf}</span>}
-                       </div>
-                    </td>
-                    <td className="p-4"><StatusBadge status={order.status} /></td>
-                    <td className="p-4 text-slate-500">
-                        {order.assignedMechanicId ? (
-                            <div className="flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-full bg-slate-200 text-[10px] flex items-center justify-center font-bold">
-                                    {MOCK_USERS.find(u => u.id === order.assignedMechanicId)?.avatar}
-                                </span>
-                                <span className="text-xs">{MOCK_USERS.find(u => u.id === order.assignedMechanicId)?.name.split(' ')[0]}</span>
-                            </div>
-                        ) : <span className="text-xs italic text-slate-400">Pendente</span>}
-                    </td>
-                    <td className="p-4 font-mono font-medium text-slate-700">
-                      {order.totalCost > 0 ? `R$ ${order.totalCost.toFixed(2)}` : '-'}
-                    </td>
-                    {isAdmin && (
-                        <td className="p-4 text-right">
-                        <button 
-                            onClick={(e) => handleDelete(e, order.id)}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Exclusão Segura"
-                        >
-                            <Trash2 size={16} />
-                        </button>
-                        </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredOrders.length === 0 && (
-                <div className="p-12 text-center text-slate-500 flex flex-col items-center">
-                    <Search size={48} className="text-slate-200 mb-4" />
-                    <p>Nenhuma ordem de serviço encontrada com os critérios selecionados.</p>
-                </div>
-            )}
-        </div>
-      </div>
-    );
-  };
-
-  const NewOSView = () => {
-    const [loading, setLoading] = useState(false);
-    const [aiResult, setAiResult] = useState<AIDiagnosisResult | null>(null);
-    
-    const [formData, setFormData] = useState<Partial<CreateOSInput>>({
-      customerName: '',
-      customerCpf: '',
-      phone: '',
-      vehicleModel: '',
-      plate: '',
-      currentMileage: undefined,
-      complaint: '',
-      initialStatus: OSStatus.PENDING,
-      estimatedLaborCost: 0,
-      estimatedPartsCost: 0,
-      acceptsNotifications: true
-    });
-
-    const handleDiagnose = async () => {
-      if (!formData.vehicleModel || !formData.complaint) {
-        alert("Preencha o modelo do veículo e a reclamação para usar a IA.");
-        return;
-      }
-      setLoading(true);
-      // Pass mileage to AI service
-      const result = await getMechanicDiagnosis(formData.vehicleModel, formData.complaint, formData.currentMileage);
-      
-      if (result) {
-        setAiResult(result);
-        
-        // Auto-fill suggestions
-        const suggestedPartsCost = result.recommendedParts.reduce((acc, p) => acc + p.estimatedCost, 0);
-        const suggestedLaborCost = result.estimatedLaborHours * 100; // Assumption: 100 R$/h
-        
-        setFormData(prev => ({ 
-            ...prev, 
-            initialStatus: OSStatus.DIAGNOSING,
-            estimatedPartsCost: suggestedPartsCost,
-            estimatedLaborCost: suggestedLaborCost,
-            aiDiagnosis: result
-        }));
-      } else {
-          alert("Não foi possível gerar diagnóstico. Tente novamente.");
-      }
-      setLoading(false);
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      
-      // Call Mutation: criarOS
-      const input: CreateOSInput = {
-          customerName: formData.customerName!,
-          customerCpf: formData.customerCpf,
-          phone: formData.phone!,
-          vehicleModel: formData.vehicleModel!,
-          plate: formData.plate!,
-          currentMileage: formData.currentMileage,
-          complaint: formData.complaint!,
-          acceptsNotifications: formData.acceptsNotifications!,
-          aiDiagnosis: aiResult || undefined,
-          initialStatus: formData.initialStatus,
-          estimatedLaborCost: formData.estimatedLaborCost,
-          estimatedPartsCost: formData.estimatedPartsCost
-      };
-
-      const newOS = createServiceOrder(input);
-      setSelectedOS(newOS);
-      setCurrentView('OS_DETAILS'); // Go to details immediately
-    };
-
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-        <Card title="Nova Ordem de Serviço (UC001)">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Dados do Veículo</label>
-                  <div className="grid grid-cols-3 gap-4 mt-1">
-                      <div className="col-span-2">
-                        <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Ex: VW Gol 1.6 2018" 
-                            value={formData.vehicleModel} onChange={e => setFormData({...formData, vehicleModel: e.target.value})}
-                        />
-                      </div>
-                      <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg uppercase font-mono text-sm" placeholder="ABC-1234" 
-                          value={formData.plate} onChange={e => setFormData({...formData, plate: e.target.value})}
-                      />
-                      <div className="col-span-3">
-                         <input type="number" className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Quilometragem Atual (km) - Opcional" 
-                            value={formData.currentMileage || ''} onChange={e => setFormData({...formData, currentMileage: Number(e.target.value)})}
-                         />
-                         <p className="text-[10px] text-slate-400 mt-1">* Importante para Sugestão de Manutenção Preventiva (IA)</p>
-                      </div>
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Cliente</label>
-                  <div className="grid grid-cols-2 gap-4 mt-1">
-                      <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Nome completo" 
-                          value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})}
-                      />
-                      <input type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="CPF (000.000.000-00)" 
-                          value={formData.customerCpf || ''} onChange={e => setFormData({...formData, customerCpf: e.target.value})}
-                      />
-                      <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm col-span-2" placeholder="Telefone" 
-                          value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}
-                      />
-                      <div className="col-span-2 flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg">
-                          <input 
-                              type="checkbox" 
-                              id="acceptsNotifications"
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                              checked={formData.acceptsNotifications}
-                              onChange={e => setFormData({...formData, acceptsNotifications: e.target.checked})}
-                          />
-                          <label htmlFor="acceptsNotifications" className="text-xs text-blue-800 font-medium cursor-pointer">
-                              Cliente autoriza notificações via WhatsApp/SMS (LGPD)
-                          </label>
-                      </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Reclamação Principal</label>
-                <textarea required className="w-full p-3 border border-slate-300 rounded-lg h-24 mt-1 text-sm" placeholder="Descreva o problema relatado..."
-                   value={formData.complaint} onChange={e => setFormData({...formData, complaint: e.target.value})}
-                ></textarea>
-              </div>
-              
-              <div className="flex items-center gap-3 pt-2">
-                  <button type="button" onClick={handleDiagnose} disabled={loading} className="flex-1 flex justify-center items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2.5 rounded-lg transition-all disabled:opacity-50 font-medium text-sm shadow-md shadow-purple-200">
-                    {loading ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div> : <Bot size={18} />}
-                    Analisar com IA
-                  </button>
-                  <button type="submit" className="flex-1 flex justify-center items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-lg transition-all font-medium text-sm shadow-md">
-                    <Save size={18} /> Criar OS
-                  </button>
-              </div>
-            </form>
-        </Card>
-
-        {aiResult ? (
-            <Card title="Análise IA (Pré-Diagnóstico)" className="border-purple-200 shadow-lg shadow-purple-50/50">
-               <div className="space-y-4 text-sm">
-                   <div>
-                       <h4 className="font-bold text-purple-900 flex items-center gap-2"><AlertTriangle size={16}/> Causas Prováveis (Ordenadas por Probabilidade)</h4>
-                       <ol className="list-decimal list-inside text-slate-700 ml-1">
-                           {aiResult.possibleCauses.map((c, i) => <li key={i}>{c}</li>)}
-                       </ol>
-                   </div>
-                   <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
-                       <h4 className="font-bold text-purple-900 mb-1">Passos para Diagnóstico</h4>
-                       <ol className="list-decimal list-inside text-slate-700 space-y-1">
-                           {aiResult.diagnosisSteps.map((s, i) => <li key={i}>{s}</li>)}
-                       </ol>
-                   </div>
-                   
-                   {/* Preventive Maintenance Highlight */}
-                   <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                       <h4 className="font-bold text-indigo-900 flex items-center gap-2"><ShieldCheck size={16}/> Recomendação Preventiva (Upsell)</h4>
-                       <p className="text-indigo-800 mt-1">{aiResult.preventiveMaintenance}</p>
-                   </div>
-
-                   <div>
-                       <h4 className="font-bold text-slate-800">Estimativa de Peças</h4>
-                       <div className="flex flex-wrap gap-2 mt-1">
-                           {aiResult.recommendedParts.map((p, i) => (
-                               <span key={i} className="px-2 py-1 bg-slate-100 rounded text-xs border border-slate-200">
-                                   {p.name} (~R$ {p.estimatedCost})
-                               </span>
-                           ))}
-                       </div>
-                   </div>
-                   <div className="flex justify-between items-center text-xs font-mono text-slate-500 pt-2 border-t border-slate-100">
-                        <span>Mão de Obra Est.: {aiResult.estimatedLaborHours}h</span>
-                   </div>
-               </div>
-            </Card>
-        ) : (
-            <div className="border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 p-8 h-full bg-slate-50">
-                <Bot size={48} className="mb-2 opacity-20" />
-                <p>Preencha os dados e clique em "Analisar com IA" para obter sugestões de diagnóstico e manutenção preventiva.</p>
-            </div>
-        )}
-      </div>
-    );
-  };
-
   const OSDetailsView = () => {
       if (!selectedOS) return null;
 
       const [os, setOs] = useState<ServiceOrder>(selectedOS);
       const [editMode, setEditMode] = useState(false);
       const [activeTab, setActiveTab] = useState<'DETAILS' | 'MESSAGES'>('DETAILS');
+      const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [showReceiptModal, setShowReceiptModal] = useState(false);
+      
+      // Item Management State
+      const [items, setItems] = useState<ServiceItem[]>(selectedOS.items || []);
+      const [newItem, setNewItem] = useState<Partial<ServiceItem>>({
+          description: '', type: 'LABOR', quantity: 1, unitPrice: 0
+      });
 
-      // Call Mutation: updateServiceOrderStatus (Implicitly done when saving if status changed, 
-      // but here we are using a simplified 'save' that handles notes and costs. 
-      // Status changes are handled by the buttons below)
+      // Recalculate costs whenever items change
+      useEffect(() => {
+          const labor = items.filter(i => i.type === 'LABOR').reduce((acc, i) => acc + i.totalPrice, 0);
+          const parts = items.filter(i => i.type === 'PART').reduce((acc, i) => acc + i.totalPrice, 0);
+          const total = labor + parts;
+          
+          setOs(prev => ({
+              ...prev,
+              items: items,
+              laborCost: labor,
+              partsCost: parts,
+              totalCost: total
+          }));
+      }, [items]);
+
+      const handleAddItem = () => {
+          if (!newItem.description || !newItem.unitPrice) return;
+          const qty = newItem.quantity || 1;
+          const price = newItem.unitPrice || 0;
+          
+          const item: ServiceItem = {
+              id: Math.random().toString(36).substr(2, 9),
+              description: newItem.description,
+              type: newItem.type as 'LABOR' | 'PART',
+              quantity: qty,
+              unitPrice: price,
+              totalPrice: qty * price
+          };
+          
+          setItems([...items, item]);
+          setNewItem({ description: '', type: 'LABOR', quantity: 1, unitPrice: 0 });
+      };
+
+      const handleRemoveItem = (id: string) => {
+          setItems(items.filter(i => i.id !== id));
+      };
+
+      // Call Mutation: updateServiceOrderStatus
       const handleSave = () => {
-          // This is a partial update for costs/notes
-          setOrders(prev => prev.map(o => o.id === selectedOS.id ? selectedOS : o));
-          addLog('UPDATE', `Editou Detalhes OS ${selectedOS.id}`, selectedOS.id);
+          setOrders(prev => prev.map(o => o.id === os.id ? os : o));
+          setSelectedOS(os);
+          addLog('UPDATE', `Editou Detalhes OS ${os.id}`, os.id);
           setEditMode(false);
           alert('OS Atualizada com sucesso!');
       };
 
-      // Call Mutation: atualizarStatusOS
       const changeStatus = (newStatus: OSStatus) => {
-         updateServiceOrderStatus(selectedOS.id, newStatus);
+         updateServiceOrderStatus(os.id, newStatus);
       };
 
-      // Call Mutation: atribuirMecanico
       const handleAssignMechanic = (e: React.ChangeEvent<HTMLSelectElement>) => {
-         assignMechanic(selectedOS.id, e.target.value);
+         assignMechanic(os.id, e.target.value);
       }
 
-      // Call Mutation: registrarPagamento
-      const handlePayment = () => {
-          const method = prompt("Selecione o método (CREDIT_CARD, DEBIT_CARD, CASH, PIX):", "PIX") as any;
-          if (['CREDIT_CARD', 'DEBIT_CARD', 'CASH', 'PIX'].includes(method)) {
-              // Can also ask for notes via prompt if needed
-              const notes = prompt("Observações do pagamento (opcional):", "") || "";
-              registerPayment(selectedOS.id, {
-                  method: method,
-                  amount: selectedOS.totalCost,
-                  notes: notes
-              });
-          } else {
-              alert("Método inválido.");
-          }
+      const handlePaymentConfirm = (input: PaymentInput) => {
+          registerPayment(os.id, input);
       }
 
       const sendPreventiveReminder = () => {
-          const notification = generateNotification(selectedOS, 'PREVENTIVE');
+          const notification = generateNotification(os, 'PREVENTIVE');
           if (notification) {
-              const updated = { ...selectedOS, notifications: [notification, ...(selectedOS.notifications || [])] };
-              setOrders(prev => prev.map(o => o.id === selectedOS.id ? updated : o));
+              const updated = { ...os, notifications: [notification, ...(os.notifications || [])] };
+              setOrders(prev => prev.map(o => o.id === os.id ? updated : o));
               setSelectedOS(updated);
               alert("Lembrete Preventivo enviado com sucesso!");
           } else {
@@ -1074,19 +829,32 @@ export default function App() {
 
       return (
           <div className="space-y-6 animate-fade-in pb-10">
+              <PaymentModal 
+                 isOpen={showPaymentModal} 
+                 onClose={() => setShowPaymentModal(false)} 
+                 total={os.totalCost}
+                 onConfirm={handlePaymentConfirm}
+              />
+              
+              <ReceiptModal
+                 isOpen={showReceiptModal}
+                 onClose={() => setShowReceiptModal(false)}
+                 order={os}
+              />
+
               <div className="flex items-center gap-4 mb-2">
                   <button onClick={() => setCurrentView('OS_LIST')} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                       <ChevronLeft />
                   </button>
                   <div>
                       <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                          {selectedOS.id} <StatusBadge status={selectedOS.status} />
+                          {os.id} <StatusBadge status={os.status} />
                       </h2>
                   </div>
                   <div className="ml-auto flex gap-2">
                       {editMode ? (
                           <>
-                            <button onClick={() => setEditMode(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                            <button onClick={() => {setEditMode(false); setItems(selectedOS.items || [])}} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
                             <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg flex items-center gap-2"><Save size={18}/> Salvar</button>
                           </>
                       ) : (
@@ -1107,7 +875,7 @@ export default function App() {
                     onClick={() => setActiveTab('MESSAGES')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'MESSAGES' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                   >
-                      Comunicação com Cliente <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-xs">{selectedOS.notifications?.length || 0}</span>
+                      Comunicação com Cliente <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-xs">{os.notifications?.length || 0}</span>
                   </button>
               </div>
 
@@ -1119,21 +887,21 @@ export default function App() {
                             <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase">Cliente</label>
-                                    <div className="text-slate-800 font-medium text-lg">{selectedOS.customerName}</div>
-                                    <div className="text-slate-500">{selectedOS.phone}</div>
-                                    {selectedOS.customerCpf && <div className="text-xs text-slate-400 mt-1">CPF: {selectedOS.customerCpf}</div>}
+                                    <div className="text-slate-800 font-medium text-lg">{os.customerName}</div>
+                                    <div className="text-slate-500">{os.phone}</div>
+                                    {os.customerCpf && <div className="text-xs text-slate-400 mt-1">CPF: {os.customerCpf}</div>}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase">Veículo</label>
-                                    <div className="text-slate-800 font-medium text-lg">{selectedOS.vehicleModel}</div>
+                                    <div className="text-slate-800 font-medium text-lg">{os.vehicleModel}</div>
                                     <div className="flex gap-2">
-                                    <div className="text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded">{selectedOS.plate}</div>
-                                    {selectedOS.currentMileage && <div className="text-slate-500 bg-slate-100 inline-block px-1 rounded">{selectedOS.currentMileage} km</div>}
+                                    <div className="text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded">{os.plate}</div>
+                                    {os.currentMileage && <div className="text-slate-500 bg-slate-100 inline-block px-1 rounded">{os.currentMileage} km</div>}
                                     </div>
                                 </div>
                                 <div className="col-span-2 pt-4 border-t border-slate-100">
                                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reclamação do Cliente</label>
-                                    <p className="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">"{selectedOS.complaint}"</p>
+                                    <p className="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">"{os.complaint}"</p>
                                 </div>
                                 <div className="col-span-2">
                                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Notas do Mecânico (Técnico)</label>
@@ -1141,12 +909,12 @@ export default function App() {
                                         <textarea 
                                             className="w-full p-3 border border-slate-300 rounded-lg"
                                             rows={4}
-                                            value={selectedOS.mechanicNotes || ''}
-                                            onChange={e => setSelectedOS({...selectedOS, mechanicNotes: e.target.value})}
+                                            value={os.mechanicNotes || ''}
+                                            onChange={e => setOs({...os, mechanicNotes: e.target.value})}
                                             placeholder="Descreva o serviço realizado, observações técnicas..."
                                         />
                                     ) : (
-                                        <p className="text-slate-700 whitespace-pre-wrap">{selectedOS.mechanicNotes || 'Nenhuma observação registrada.'}</p>
+                                        <p className="text-slate-700 whitespace-pre-wrap">{os.mechanicNotes || 'Nenhuma observação registrada.'}</p>
                                     )}
                                 </div>
                                 
@@ -1155,7 +923,7 @@ export default function App() {
                                     {editMode ? (
                                         <select 
                                             className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                                            value={selectedOS.assignedMechanicId || ''}
+                                            value={os.assignedMechanicId || ''}
                                             onChange={handleAssignMechanic}
                                         >
                                             <option value="">Selecione...</option>
@@ -1165,12 +933,12 @@ export default function App() {
                                         </select>
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            {selectedOS.assignedMechanicId ? (
+                                            {os.assignedMechanicId ? (
                                                 <>
                                                     <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold">
-                                                        {MOCK_USERS.find(u => u.id === selectedOS.assignedMechanicId)?.avatar}
+                                                        {MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.avatar}
                                                     </div>
-                                                    <span>{MOCK_USERS.find(u => u.id === selectedOS.assignedMechanicId)?.name}</span>
+                                                    <span>{MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name}</span>
                                                 </>
                                             ) : <span className="text-slate-400 italic">Não atribuído</span>}
                                         </div>
@@ -1179,13 +947,111 @@ export default function App() {
                             </div>
                         </Card>
 
-                        {selectedOS.aiDiagnosis && (
+                        {/* ITEMS TABLE */}
+                        <Card title="Itens do Serviço (Peças e Mão de Obra)">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
+                                        <tr>
+                                            <th className="p-3">Descrição</th>
+                                            <th className="p-3">Tipo</th>
+                                            <th className="p-3 w-20">Qtd</th>
+                                            <th className="p-3 w-28">Unit. (R$)</th>
+                                            <th className="p-3 w-28 text-right">Total</th>
+                                            {editMode && <th className="p-3 w-10"></th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {items.map((item) => (
+                                            <tr key={item.id}>
+                                                <td className="p-3 font-medium text-slate-700">{item.description}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${item.type === 'PART' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                        {item.type === 'PART' ? 'Peça' : 'Serviço'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3">{item.quantity}</td>
+                                                <td className="p-3">R$ {item.unitPrice.toFixed(2)}</td>
+                                                <td className="p-3 text-right font-bold text-slate-700">R$ {item.totalPrice.toFixed(2)}</td>
+                                                {editMode && (
+                                                    <td className="p-3 text-center">
+                                                        <button onClick={() => handleRemoveItem(item.id)} className="text-red-400 hover:text-red-600">
+                                                            <MinusCircle size={18} />
+                                                        </button>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))}
+                                        {editMode && (
+                                            <tr className="bg-slate-50 border-t border-slate-200">
+                                                <td className="p-2">
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Descrição do item..." 
+                                                        className="w-full p-2 border border-slate-300 rounded text-sm"
+                                                        value={newItem.description}
+                                                        onChange={e => setNewItem({...newItem, description: e.target.value})}
+                                                    />
+                                                </td>
+                                                <td className="p-2">
+                                                    <select 
+                                                        className="w-full p-2 border border-slate-300 rounded text-sm"
+                                                        value={newItem.type}
+                                                        onChange={e => setNewItem({...newItem, type: e.target.value as any})}
+                                                    >
+                                                        <option value="LABOR">Serviço</option>
+                                                        <option value="PART">Peça</option>
+                                                    </select>
+                                                </td>
+                                                <td className="p-2">
+                                                    <input 
+                                                        type="number" 
+                                                        min="1"
+                                                        className="w-full p-2 border border-slate-300 rounded text-sm"
+                                                        value={newItem.quantity}
+                                                        onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})}
+                                                    />
+                                                </td>
+                                                <td className="p-2">
+                                                    <input 
+                                                        type="number" 
+                                                        min="0"
+                                                        step="0.01"
+                                                        placeholder="0.00"
+                                                        className="w-full p-2 border border-slate-300 rounded text-sm"
+                                                        value={newItem.unitPrice}
+                                                        onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})}
+                                                    />
+                                                </td>
+                                                <td className="p-2 text-right font-mono text-slate-400">
+                                                    R$ {((newItem.quantity || 0) * (newItem.unitPrice || 0)).toFixed(2)}
+                                                </td>
+                                                <td className="p-2">
+                                                    <button 
+                                                        onClick={handleAddItem}
+                                                        disabled={!newItem.description || !newItem.unitPrice}
+                                                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white p-2 rounded-full"
+                                                    >
+                                                        <Plus size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                                {items.length === 0 && !editMode && (
+                                    <p className="p-4 text-center text-slate-400 text-sm italic">Nenhum item adicionado. Clique em "Editar OS" para adicionar serviços e peças.</p>
+                                )}
+                            </div>
+                        </Card>
+
+                        {os.aiDiagnosis && (
                             <Card title="Inteligência Preditiva (IA)" className="border-l-4 border-l-purple-500">
                                 <div className="flex gap-4 items-start">
                                     <div className="bg-purple-100 p-2 rounded-full text-purple-600 mt-1"><ShieldCheck size={20}/></div>
                                     <div>
                                         <h4 className="font-bold text-slate-800 mb-1">Recomendação de Manutenção Preventiva (UC006)</h4>
-                                        <p className="text-slate-600 text-sm leading-relaxed">{selectedOS.aiDiagnosis.preventiveMaintenance}</p>
+                                        <p className="text-slate-600 text-sm leading-relaxed">{os.aiDiagnosis.preventiveMaintenance}</p>
                                     </div>
                                 </div>
                             </Card>
@@ -1203,7 +1069,7 @@ export default function App() {
                                             key={s} 
                                             disabled={!editMode}
                                             onClick={() => changeStatus(s)}
-                                            className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${selectedOS.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
+                                            className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${os.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
                                         >
                                             {s}
                                         </button>
@@ -1216,38 +1082,37 @@ export default function App() {
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 text-sm">Mão de Obra</span>
-                                    {editMode && isAdmin ? (
-                                        <input type="number" className="w-24 p-1 text-right border rounded" value={selectedOS.laborCost} onChange={e => setSelectedOS({...selectedOS, laborCost: Number(e.target.value)})} />
-                                    ) : (
-                                        <span className="font-mono">R$ {selectedOS.laborCost.toFixed(2)}</span>
-                                    )}
+                                    <span className="font-mono">R$ {os.laborCost.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 text-sm">Peças</span>
-                                    {editMode && isAdmin ? (
-                                        <input type="number" className="w-24 p-1 text-right border rounded" value={selectedOS.partsCost} onChange={e => setSelectedOS({...selectedOS, partsCost: Number(e.target.value)})} />
-                                    ) : (
-                                        <span className="font-mono">R$ {selectedOS.partsCost.toFixed(2)}</span>
-                                    )}
+                                    <span className="font-mono">R$ {os.partsCost.toFixed(2)}</span>
                                 </div>
                                 <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
                                     <span className="font-bold text-slate-800">TOTAL</span>
-                                    <span className="font-bold text-xl text-green-600">R$ {(selectedOS.laborCost + selectedOS.partsCost).toFixed(2)}</span>
+                                    <span className="font-bold text-xl text-green-600">R$ {os.totalCost.toFixed(2)}</span>
                                 </div>
+                                <p className="text-xs text-slate-400 text-center">* Valores calculados automaticamente com base na lista de itens.</p>
 
                                 {/* Payment Section - Admin Only */}
                                 {isAdmin && (
                                     <div className="pt-4 mt-4 border-t border-slate-100 bg-slate-50 -mx-6 px-6 -mb-6 pb-6">
                                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><Wallet size={14}/> Pagamento</h4>
-                                        {selectedOS.status === OSStatus.PAID ? (
+                                        {os.status === OSStatus.PAID ? (
                                             <div className="bg-green-100 text-green-800 p-3 rounded-lg text-center text-sm font-medium border border-green-200">
-                                                <p>Pagamento Confirmado</p>
-                                                {selectedOS.paymentMethod && <p className="text-xs opacity-75 mt-1">Via {selectedOS.paymentMethod}</p>}
+                                                <p className="flex items-center justify-center gap-1"><CheckCircle size={14}/> Pagamento Confirmado</p>
+                                                {os.paymentMethod && <p className="text-xs opacity-75 mt-1">Via {os.paymentMethod}</p>}
+                                                <button 
+                                                    onClick={() => setShowReceiptModal(true)} 
+                                                    className="mt-3 text-xs bg-white border border-green-200 text-green-700 px-3 py-1.5 rounded-full flex items-center justify-center gap-1 mx-auto hover:bg-green-50 transition-colors"
+                                                >
+                                                    <FileText size={12} /> Ver Recibo
+                                                </button>
                                             </div>
                                         ) : (
                                             <button 
                                                 disabled={!editMode}
-                                                onClick={handlePayment}
+                                                onClick={() => setShowPaymentModal(true)}
                                                 className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
                                             >
                                                 Registrar Pagamento
@@ -1263,14 +1128,14 @@ export default function App() {
                 <div className="animate-fade-in grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px]">
                     {/* Message List */}
                     <Card title="Histórico de Notificações (UC 4.2)" className="md:col-span-2 h-full flex flex-col relative">
-                        {(!selectedOS.notifications || selectedOS.notifications.length === 0) ? (
+                        {(!os.notifications || os.notifications.length === 0) ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                                 <MessageCircle size={48} className="mb-2 opacity-20" />
                                 <p>Nenhuma notificação enviada para este cliente.</p>
                             </div>
                         ) : (
                             <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                                {selectedOS.notifications.map(n => (
+                                {os.notifications.map(n => (
                                     <div key={n.id} className="flex gap-4 p-4 border border-slate-100 rounded-xl bg-slate-50 relative group">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                                             n.channel === 'WHATSAPP' ? 'bg-green-100 text-green-600' : 
@@ -1293,7 +1158,7 @@ export default function App() {
                                             <div className="flex gap-2">
                                                 {n.channel === 'WHATSAPP' && (
                                                     <button 
-                                                        onClick={() => openWhatsApp(selectedOS.phone, n.message)}
+                                                        onClick={() => openWhatsApp(os.phone, n.message)}
                                                         className="text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
                                                     >
                                                         <ExternalLink size={12} /> Enviar WhatsApp
@@ -1329,14 +1194,14 @@ export default function App() {
                     <div className="space-y-6">
                         <Card title="Ações de Comunicação">
                              <div className="space-y-4">
-                                 <div className={`p-3 rounded-lg border text-sm ${selectedOS.acceptsNotifications ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-                                     <strong>Status LGPD:</strong> {selectedOS.acceptsNotifications ? 'Cliente Autorizou Notificações' : 'Cliente NÃO Autorizou Notificações'}
+                                 <div className={`p-3 rounded-lg border text-sm ${os.acceptsNotifications ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                     <strong>Status LGPD:</strong> {os.acceptsNotifications ? 'Cliente Autorizou Notificações' : 'Cliente NÃO Autorizou Notificações'}
                                  </div>
                                  
-                                 {selectedOS.aiDiagnosis && (
+                                 {os.aiDiagnosis && (
                                      <button 
                                         onClick={sendPreventiveReminder}
-                                        disabled={!selectedOS.acceptsNotifications}
+                                        disabled={!os.acceptsNotifications}
                                         className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-purple-200"
                                      >
                                          <Bell size={16}/> Enviar Lembrete Preventivo (IA)
@@ -1354,8 +1219,8 @@ export default function App() {
                                  <textarea className="w-full p-3 border border-slate-300 rounded-lg text-sm h-24" placeholder="Digite a mensagem..."></textarea>
                                  <div className="flex gap-2">
                                      <button 
-                                        disabled={!selectedOS.acceptsNotifications} 
-                                        onClick={() => openWhatsApp(selectedOS.phone, "Olá, mensagem manual da oficina.")}
+                                        disabled={!os.acceptsNotifications} 
+                                        onClick={() => openWhatsApp(os.phone, "Olá, mensagem manual da oficina.")}
                                         className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
                                      >
                                          <MessageCircle size={16}/> WhatsApp
@@ -1373,140 +1238,389 @@ export default function App() {
       )
   }
 
-  const ChatView = () => {
-    const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([
-        { role: 'model', text: 'Olá! Sou o assistente virtual da OSMech. Como posso ajudar com dúvidas técnicas ou de gestão hoje?' }
-    ]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const OSListView = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<OSStatus | 'ALL'>('ALL');
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+    const filteredOrders = orders.filter(o => {
+        const matchesSearch = o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              o.vehicleModel.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              o.id.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    const handleSend = async () => {
-        if (!input.trim()) return;
-        
-        const userMsg = input;
-        setInput('');
-        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-        setLoading(true);
-
-        const response = await getShopAssistantChat(messages, userMsg);
-        
-        setMessages(prev => [...prev, { role: 'model', text: response }]);
-        setLoading(false);
+    const handleDelete = (id: string) => {
+        if(!window.confirm("Tem certeza que deseja excluir esta OS?")) return;
+        const pwd = prompt("Senha de Administrador necessária para exclusão segura:");
+        if(pwd) {
+            const result = deleteServiceOrder(id, pwd);
+            if(result.success) {
+                alert(`OS Excluída. ID do Log de Auditoria: ${result.logId}`);
+            } else {
+                alert(`Erro: ${result.error}`);
+            }
+        }
     };
 
     return (
-        <Card className="h-[calc(100vh-200px)] min-h-[500px] flex flex-col p-0 overflow-hidden relative">
-            <div className="bg-slate-900 text-white p-4 flex items-center gap-3">
-                 <div className="bg-blue-500 p-2 rounded-full">
-                     <Bot size={24} />
-                 </div>
-                 <div>
-                     <h3 className="font-bold">Assistente Técnico IA</h3>
-                     <p className="text-xs text-slate-400">Tire dúvidas sobre mecânica, normas e gestão.</p>
-                 </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                            m.role === 'user' 
-                            ? 'bg-blue-600 text-white rounded-br-none' 
-                            : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none shadow-sm'
-                        }`}>
-                            <ReactMarkdown>{m.text}</ReactMarkdown>
-                        </div>
+        <div className="space-y-6 animate-fade-in">
+             <Card>
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
+                    <div className="relative w-full md:w-96">
+                        <Search className="absolute left-3 top-3 text-slate-400" size={20} />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por cliente, veículo ou ID..." 
+                            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                ))}
-                {loading && (
-                    <div className="flex justify-start">
-                         <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none shadow-sm flex gap-2 items-center text-slate-400 text-sm">
-                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></div>
-                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></div>
-                         </div>
-                    </div>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
-
-            <div className="p-4 bg-white border-t border-slate-200">
-                <div className="flex gap-2">
-                    <input 
-                        type="text" 
-                        className="flex-1 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                        placeholder="Digite sua dúvida..."
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                        disabled={loading}
-                    />
-                    <button 
-                        onClick={handleSend} 
-                        disabled={loading || !input.trim()}
-                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white p-2.5 rounded-lg transition-colors"
+                    <select 
+                        className="w-full md:w-48 p-2 border border-slate-300 rounded-lg bg-white"
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value as any)}
                     >
-                        <Send size={20} />
-                    </button>
+                        <option value="ALL">Todos os Status</option>
+                        {Object.values(OSStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                 </div>
-            </div>
-        </Card>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="text-slate-500 text-sm border-b border-slate-200">
+                                <th className="p-3 font-medium">OS ID</th>
+                                <th className="p-3 font-medium">Cliente</th>
+                                <th className="p-3 font-medium">Veículo</th>
+                                <th className="p-3 font-medium">Status</th>
+                                <th className="p-3 font-medium">Mecânico</th>
+                                <th className="p-3 font-medium">Total</th>
+                                <th className="p-3 font-medium text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                            {filteredOrders.map(order => (
+                                <tr key={order.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                    <td className="p-3 font-bold text-blue-600">#{order.id}</td>
+                                    <td className="p-3">
+                                        <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        <div className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</div>
+                                    </td>
+                                    <td className="p-3">{order.vehicleModel} <br/><span className="text-xs text-slate-400 bg-slate-100 px-1 rounded">{order.plate}</span></td>
+                                    <td className="p-3"><StatusBadge status={order.status} /></td>
+                                    <td className="p-3 text-slate-600">{order.assignedMechanicId ? MOCK_USERS.find(u => u.id === order.assignedMechanicId)?.name.split(' ')[0] : '-'}</td>
+                                    <td className="p-3 font-mono">R$ {order.totalCost.toFixed(2)}</td>
+                                    <td className="p-3 text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <button 
+                                                onClick={() => { setSelectedOS(order); setCurrentView('OS_DETAILS'); }}
+                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                                title="Ver Detalhes"
+                                            >
+                                                <ExternalLink size={18} />
+                                            </button>
+                                            {isAdmin && (
+                                                <button 
+                                                    onClick={() => handleDelete(order.id)}
+                                                    className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {filteredOrders.length === 0 && <p className="text-center text-slate-400 py-8">Nenhuma ordem de serviço encontrada.</p>}
+                </div>
+             </Card>
+        </div>
     );
   };
 
-  const ReportsView = () => {
-      if (!isAdmin) return <div className="p-4 text-red-500 bg-red-50 rounded-lg border border-red-200">Acesso negado. Apenas administradores podem ver esta tela.</div>;
+  const NewOSView = () => {
+      const [formData, setFormData] = useState<CreateOSInput>({
+          customerName: '', phone: '', vehicleModel: '', plate: '', complaint: '', acceptsNotifications: true
+      });
+      const [loadingAI, setLoadingAI] = useState(false);
+      const [aiResult, setAiResult] = useState<AIDiagnosisResult | null>(null);
+
+      const handleAnalyze = async () => {
+          if(!formData.vehicleModel || !formData.complaint) {
+              alert("Informe o veículo e a reclamação para diagnóstico.");
+              return;
+          }
+          setLoadingAI(true);
+          const result = await getMechanicDiagnosis(formData.vehicleModel, formData.complaint, formData.currentMileage);
+          setLoadingAI(false);
+          if(result) {
+              setAiResult(result);
+              setFormData(prev => ({
+                 ...prev,
+                 aiDiagnosis: result,
+                 estimatedLaborCost: result.estimatedLaborHours * 150, // Mock rate R$150/h
+                 estimatedPartsCost: result.recommendedParts.reduce((acc, p) => acc + p.estimatedCost, 0)
+              }));
+          } else {
+              alert("Não foi possível gerar diagnóstico. Tente novamente.");
+          }
+      };
+
+      const handleSubmit = (e: React.FormEvent) => {
+          e.preventDefault();
+          const newOS = createServiceOrder(formData);
+          alert(`OS #${newOS.id} criada com sucesso!`);
+          setSelectedOS(newOS);
+          setCurrentView('OS_DETAILS');
+      };
 
       return (
-          <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard title="Receita Total" value={`R$ ${stats.monthlyRevenue.toFixed(2)}`} icon={<DollarSign size={24}/>} color="bg-emerald-500"/>
-                  <StatCard title="OS Finalizadas" value={stats.completed} icon={<CheckCircle size={24}/>} color="bg-blue-500"/>
-                  <StatCard title="Taxa Conversão" value={`${stats.conversionRate.toFixed(1)}%`} icon={<Activity size={24}/>} color="bg-purple-500"/>
-                  <StatCard title="Logs do Sistema" value={logs.length} icon={<ShieldCheck size={24}/>} color="bg-slate-500"/>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
+              <div className="space-y-6">
+                  <Card title="Dados do Cliente e Veículo">
+                      <form onSubmit={handleSubmit} className="space-y-4">
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Cliente *</label>
+                              <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label className="block text-sm font-medium text-slate-700 mb-1">Telefone *</label>
+                                  <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="(11) 99999-9999" />
+                              </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-slate-700 mb-1">CPF (Opcional)</label>
+                                  <input type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={formData.customerCpf || ''} onChange={e => setFormData({...formData, customerCpf: e.target.value})} />
+                              </div>
+                          </div>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label className="block text-sm font-medium text-slate-700 mb-1">Veículo *</label>
+                                  <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={formData.vehicleModel} onChange={e => setFormData({...formData, vehicleModel: e.target.value})} placeholder="Ex: Honda Civic 2015" />
+                              </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-slate-700 mb-1">Placa *</label>
+                                  <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={formData.plate} onChange={e => setFormData({...formData, plate: e.target.value})} />
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Quilometragem</label>
+                              <input type="number" className="w-full p-2 border border-slate-300 rounded-lg" value={formData.currentMileage || ''} onChange={e => setFormData({...formData, currentMileage: Number(e.target.value)})} />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Reclamação do Cliente *</label>
+                              <textarea required className="w-full p-2 border border-slate-300 rounded-lg h-24" value={formData.complaint} onChange={e => setFormData({...formData, complaint: e.target.value})} placeholder="Descreva o problema..." />
+                          </div>
+                          
+                          <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                             <input type="checkbox" id="notif" checked={formData.acceptsNotifications} onChange={e => setFormData({...formData, acceptsNotifications: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
+                             <label htmlFor="notif" className="text-sm text-slate-600 cursor-pointer">Cliente autoriza receber notificações (WhatsApp/Email)</label>
+                          </div>
+
+                          <div className="pt-4 flex gap-4">
+                              <button type="button" onClick={handleAnalyze} disabled={loadingAI || !formData.vehicleModel || !formData.complaint} className="flex-1 bg-purple-100 text-purple-700 hover:bg-purple-200 py-3 rounded-lg font-bold flex justify-center items-center gap-2 disabled:opacity-50">
+                                  {loadingAI ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-700"></div> : <Bot size={20} />}
+                                  Diagnosticar com IA
+                              </button>
+                              <button type="submit" className="flex-1 bg-blue-600 text-white hover:bg-blue-700 py-3 rounded-lg font-bold shadow-lg shadow-blue-200">
+                                  Criar Ordem de Serviço
+                              </button>
+                          </div>
+                      </form>
+                  </Card>
               </div>
 
-              <Card title="Auditoria de Sistema (Logs)">
-                  <div className="overflow-x-auto max-h-[600px]">
-                      <table className="w-full text-left text-sm relative">
-                          <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm">
-                              <tr className="border-b border-slate-100 text-slate-500 uppercase text-xs">
+              <div className="space-y-6">
+                  {aiResult ? (
+                      <Card title="Pré-Diagnóstico IA" className="bg-gradient-to-br from-white to-purple-50 border-purple-100">
+                          <div className="space-y-4">
+                              <div>
+                                  <h4 className="text-xs font-bold text-purple-600 uppercase mb-2 flex items-center gap-2"><Activity size={14}/> Causas Prováveis</h4>
+                                  <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                                      {aiResult.possibleCauses.map((c, i) => <li key={i}>{c}</li>)}
+                                  </ul>
+                              </div>
+                               <div>
+                                  <h4 className="text-xs font-bold text-purple-600 uppercase mb-2 flex items-center gap-2"><CheckSquare size={14}/> Passos de Diagnóstico</h4>
+                                  <ul className="list-decimal pl-5 text-sm text-slate-700 space-y-1">
+                                      {aiResult.diagnosisSteps.map((c, i) => <li key={i}>{c}</li>)}
+                                  </ul>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-white p-3 rounded-lg border border-purple-100">
+                                      <p className="text-xs text-slate-500">Estimativa Peças</p>
+                                      <p className="font-bold text-slate-800">R$ {formData.estimatedPartsCost?.toFixed(2)}</p>
+                                  </div>
+                                  <div className="bg-white p-3 rounded-lg border border-purple-100">
+                                      <p className="text-xs text-slate-500">Estimativa Mão de Obra</p>
+                                      <p className="font-bold text-slate-800">R$ {formData.estimatedLaborCost?.toFixed(2)}</p>
+                                      <p className="text-[10px] text-slate-400">~{aiResult.estimatedLaborHours} horas</p>
+                                  </div>
+                              </div>
+                          </div>
+                      </Card>
+                  ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl p-8 bg-slate-50">
+                          <Bot size={48} className="mb-4 opacity-20" />
+                          <p className="text-center text-sm">Preencha os dados do veículo e clique em "Diagnosticar com IA" para receber sugestões técnicas antes de abrir a OS.</p>
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+  };
+
+  const ChatView = () => {
+      const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([
+          { role: 'model', text: 'Olá! Sou o assistente técnico da OSMech. Como posso ajudar com diagnósticos, normas ou gestão hoje?' }
+      ]);
+      const [input, setInput] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+      
+      const bottomRef = React.useRef<HTMLDivElement>(null);
+
+      useEffect(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages]);
+
+      const handleSend = async () => {
+          if(!input.trim()) return;
+          const userMsg = input;
+          setInput('');
+          setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+          setIsLoading(true);
+
+          const response = await getShopAssistantChat(messages, userMsg);
+          
+          setMessages(prev => [...prev, { role: 'model', text: response }]);
+          setIsLoading(false);
+      };
+
+      return (
+          <div className="max-w-4xl mx-auto h-[600px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden animate-fade-in">
+              <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
+                  <div className="bg-blue-600 p-2 rounded-lg text-white"><Bot size={20}/></div>
+                  <div>
+                      <h3 className="font-bold text-slate-800">Assistente Técnico IA</h3>
+                      <p className="text-xs text-slate-500">Gemini 2.5 Flash</p>
+                  </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+                  {messages.map((m, i) => (
+                      <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                              m.role === 'user' 
+                                  ? 'bg-blue-600 text-white rounded-br-none' 
+                                  : 'bg-white text-slate-700 border border-slate-100 rounded-bl-none'
+                          }`}>
+                              <ReactMarkdown>{m.text}</ReactMarkdown>
+                          </div>
+                      </div>
+                  ))}
+                  {isLoading && (
+                      <div className="flex justify-start">
+                          <div className="bg-white p-4 rounded-2xl rounded-bl-none border border-slate-100 shadow-sm flex gap-2 items-center">
+                              <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                              <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
+                              <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
+                          </div>
+                      </div>
+                  )}
+                  <div ref={bottomRef} />
+              </div>
+              <div className="p-4 bg-white border-t border-slate-100 flex gap-2">
+                  <input 
+                      type="text" 
+                      className="flex-1 p-3 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-slate-50 focus:bg-white transition-colors"
+                      placeholder="Digite sua dúvida técnica..."
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSend()}
+                  />
+                  <button 
+                      onClick={handleSend}
+                      disabled={isLoading || !input.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white p-3 rounded-lg transition-colors"
+                  >
+                      <Send size={20} />
+                  </button>
+              </div>
+          </div>
+      )
+  };
+
+  const ReportsView = () => {
+      return (
+          <div className="space-y-6 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card title="Receita por Categoria">
+                      <div className="h-64 w-full flex justify-center">
+                         <ResponsiveContainer width="100%" height="100%">
+                            <RePieChart>
+                                <Pie
+                                    data={chartRevenueBreakdown}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={0}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                    label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                >
+                                    <Cell key="cell-0" fill="#3b82f6" /> 
+                                    <Cell key="cell-1" fill="#f59e0b" /> 
+                                </Pie>
+                                <Tooltip formatter={(value) => `R$ ${Number(value).toFixed(2)}`}/>
+                                <Legend />
+                            </RePieChart>
+                         </ResponsiveContainer>
+                      </div>
+                  </Card>
+                   <Card title="Performance Operacional">
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded">
+                                <span className="text-sm text-slate-600">Total de OS</span>
+                                <span className="font-bold text-slate-800">{orders.length}</span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded">
+                                <span className="text-sm text-slate-600">Ticket Médio</span>
+                                <span className="font-bold text-slate-800">R$ {(stats.monthlyRevenue / (stats.completed || 1)).toFixed(2)}</span>
+                            </div>
+                        </div>
+                  </Card>
+              </div>
+
+              <Card title="Logs de Auditoria do Sistema" className="overflow-hidden">
+                  <div className="max-h-96 overflow-y-auto">
+                      <table className="w-full text-sm text-left">
+                          <thead className="bg-slate-50 text-slate-500 uppercase text-xs sticky top-0">
+                              <tr>
                                   <th className="p-3">Data/Hora</th>
                                   <th className="p-3">Usuário</th>
                                   <th className="p-3">Ação</th>
                                   <th className="p-3">Detalhes</th>
-                                  <th className="p-3">ID Alvo</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                              {logs.map(log => (
+                              {logs.map((log) => (
                                   <tr key={log.id} className="hover:bg-slate-50">
                                       <td className="p-3 font-mono text-xs text-slate-500">
-                                          {new Date(log.timestamp).toLocaleString()}
+                                          {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString()}
                                       </td>
                                       <td className="p-3 font-medium text-slate-700">{log.userName}</td>
                                       <td className="p-3">
-                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
-                                              log.action === 'CREATE' ? 'bg-green-50 text-green-600 border-green-100' :
-                                              log.action === 'UPDATE' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                              log.action === 'DELETE' ? 'bg-red-50 text-red-600 border-red-100' :
-                                              log.action === 'FINANCE' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
-                                              'bg-slate-100 text-slate-600 border-slate-200'
-                                          }`}>
-                                              {log.action}
-                                          </span>
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                              log.action === 'CREATE' ? 'bg-green-50 text-green-700 border-green-200' :
+                                              log.action === 'DELETE' ? 'bg-red-50 text-red-700 border-red-200' :
+                                              log.action === 'FINANCE' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                              'bg-blue-50 text-blue-700 border-blue-200'
+                                          }`}>{log.action}</span>
                                       </td>
                                       <td className="p-3 text-slate-600">{log.details}</td>
-                                      <td className="p-3 font-mono text-xs text-slate-400">{log.targetId || '-'}</td>
                                   </tr>
                               ))}
                           </tbody>

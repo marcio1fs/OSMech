@@ -295,17 +295,29 @@ export default function App() {
       ];
   }, [orders]);
 
-  const chartMechanicPerformance = useMemo(() => {
-      const counts: Record<string, number> = {};
+  const chartMechanicTMA = useMemo(() => {
+      const stats: Record<string, { totalHours: number; count: number }> = {};
+      
       orders.forEach(o => {
-          if (o.assignedMechanicId) {
-              const mechName = MOCK_USERS.find(u => u.id === o.assignedMechanicId)?.name.split(' ')[0] || 'Desc.';
-              counts[mechName] = (counts[mechName] || 0) + 1;
-          } else {
-              counts['Não Atribuído'] = (counts['Não Atribuído'] || 0) + 1;
+          // Consider COMPLETED or PAID for average calculation
+          if ((o.status === OSStatus.COMPLETED || o.status === OSStatus.PAID) && o.assignedMechanicId) {
+              const mech = MOCK_USERS.find(u => u.id === o.assignedMechanicId);
+              const name = mech?.name.split(' ')[0] || 'Desconhecido';
+              
+              // Simulating time based on Labor Cost (e.g., R$ 120/hour for estimation)
+              // Since we don't have explicit time logs in this MVP data structure
+              const estimatedHours = o.laborCost > 0 ? o.laborCost / 120 : 1; 
+
+              if (!stats[name]) stats[name] = { totalHours: 0, count: 0 };
+              stats[name].totalHours += estimatedHours;
+              stats[name].count++;
           }
       });
-      return Object.entries(counts).map(([name, count]) => ({ name, count }));
+
+      return Object.entries(stats).map(([name, data]) => ({
+          name,
+          tma: parseFloat((data.totalHours / data.count).toFixed(1))
+      }));
   }, [orders]);
 
   // --- Components ---
@@ -403,6 +415,27 @@ export default function App() {
             </ResponsiveContainer>
           </div>
         </Card>
+      </div>
+
+      {/* New Row: TMA Chart */}
+      <div className="grid grid-cols-1 gap-6">
+          <Card title="Tempo Médio de Serviço (TMA) por Mecânico (Horas)">
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartMechanicTMA}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize: 12}} />
+                  <YAxis unit="h" />
+                  <Tooltip 
+                      cursor={{fill: 'transparent'}} 
+                      contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                      formatter={(value) => [`${value} horas`, 'Tempo Médio']}
+                  />
+                  <Bar dataKey="tma" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={50} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
       </div>
     </div>
   );

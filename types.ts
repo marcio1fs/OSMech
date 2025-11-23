@@ -2,6 +2,7 @@ export enum OSStatus {
   PENDING = 'Pendente',
   DIAGNOSING = 'Em Diagnóstico',
   APPROVAL = 'Aguardando Aprovação',
+  WAITING_PARTS = 'Aguardando Peças',
   IN_PROGRESS = 'Em Execução',
   COMPLETED = 'Concluído',
   PAID = 'Finalizado/Pago'
@@ -22,6 +23,15 @@ export interface AIDiagnosisResult {
   recommendedParts: { name: string; estimatedCost: number }[];
   estimatedLaborHours: number;
   preventiveMaintenance: string;
+}
+
+export interface CustomerNotification {
+  id: string;
+  channel: 'WHATSAPP' | 'EMAIL' | 'SMS';
+  title: string;
+  message: string;
+  sentAt: string;
+  read: boolean;
 }
 
 export interface ServiceOrder {
@@ -48,6 +58,11 @@ export interface ServiceOrder {
   paymentMethod?: 'CREDIT_CARD' | 'DEBIT_CARD' | 'CASH' | 'PIX';
   
   status: OSStatus;
+  
+  // Communications
+  notifications?: CustomerNotification[];
+  acceptsNotifications?: boolean;
+
   createdAt: string;
   updatedAt: string;
 }

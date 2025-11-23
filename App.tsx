@@ -27,12 +27,17 @@ import {
   Activity,
   History,
   Calendar,
-  CheckSquare
+  CheckSquare,
+  MessageCircle,
+  Mail,
+  Smartphone,
+  Send,
+  Bell
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
-import { ServiceOrder, OSStatus, ViewState, User, AIDiagnosisResult, UserRole, AuditLogEntry } from './types';
+import { ServiceOrder, OSStatus, ViewState, User, AIDiagnosisResult, UserRole, AuditLogEntry, CustomerNotification } from './types';
 import { getMechanicDiagnosis, getShopAssistantChat } from './services/geminiService';
 import { Card, StatCard } from './components/Card';
 import { StatusBadge } from './components/StatusBadge';
@@ -56,6 +61,7 @@ const INITIAL_DATA: ServiceOrder[] = [
     complaint: 'Motor perdendo potência em subidas.',
     status: OSStatus.PAID,
     assignedMechanicId: 'u2',
+    acceptsNotifications: true,
     partsCost: 1200,
     laborCost: 450,
     totalCost: 1650,
@@ -66,6 +72,10 @@ const INITIAL_DATA: ServiceOrder[] = [
         estimatedLaborHours: 3,
         preventiveMaintenance: 'Recomendar limpeza do sistema de injeção a cada 40.000km.'
     },
+    notifications: [
+        { id: 'n1', channel: 'WHATSAPP', title: 'Abertura da OS', message: 'Sua OS #OS-1001 foi aberta! O problema relatado foi: Motor perdendo potência em subidas. Você será notificado sobre o orçamento.', sentAt: new Date(Date.now() - 86400000 * 5).toISOString(), read: true },
+        { id: 'n2', channel: 'EMAIL', title: 'Emissão de Recibo/NF', message: 'Obrigado por escolher a OSMech! Sua Nota Fiscal/Recibo da OS #OS-1001 foi enviada para o seu e-mail.', sentAt: new Date().toISOString(), read: false }
+    ],
     createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -80,9 +90,13 @@ const INITIAL_DATA: ServiceOrder[] = [
     complaint: 'Barulho na suspensão dianteira.',
     status: OSStatus.PENDING,
     assignedMechanicId: 'u3',
+    acceptsNotifications: true,
     partsCost: 0,
     laborCost: 0,
     totalCost: 0,
+    notifications: [
+         { id: 'n3', channel: 'WHATSAPP', title: 'Abertura da OS', message: 'Sua OS #OS-1002 foi aberta! O problema relatado foi: Barulho na suspensão dianteira. Você será notificado sobre o orçamento.', sentAt: new Date().toISOString(), read: true }
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
@@ -129,6 +143,74 @@ export default function App() {
   };
 
   const isAdmin = user?.role === 'ADMIN';
+
+  // --- Automated Notifications Helper ---
+  const generateNotification = (os: ServiceOrder, type: OSStatus | 'CREATED' | 'PREVENTIVE'): CustomerNotification | null => {
+      if (!os.acceptsNotifications) return null; // LGPD Compliance Check
+
+      const id = Math.random().toString(36).substr(2, 9);
+      const timestamp = new Date().toISOString();
+      const mechanicName = os.assignedMechanicId ? MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name.split(' ')[0] : 'nossa equipe';
+
+      let notif: Partial<CustomerNotification> = { id, sentAt: timestamp, read: false };
+
+      if (type === 'CREATED') {
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Abertura da OS',
+              message: `Sua OS #${os.id} foi aberta! O problema relatado foi: "${os.complaint}". Você será notificado sobre o orçamento.`
+          };
+      } else if (type === OSStatus.APPROVAL) {
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Orçamento Pronto',
+              message: `Seu orçamento para OS #${os.id} está pronto. O valor total é de R$ ${os.totalCost.toFixed(2)}. Clique aqui para aprovar/rejeitar: https://osmech.app/ap/${os.id}`
+          };
+      } else if (type === OSStatus.IN_PROGRESS) {
+          // Estimate: Current time + labor hours (mock) + 2 hours buffer
+          const laborHours = os.aiDiagnosis?.estimatedLaborHours || 2;
+          const deliveryTime = new Date(Date.now() + (laborHours + 2) * 3600000);
+          
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Início do Serviço',
+              message: `A manutenção do seu veículo (OS #${os.id}) foi iniciada pelo mecânico ${mechanicName}. Previsão de entrega: ${deliveryTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`
+          };
+      } else if (type === OSStatus.COMPLETED) {
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Serviço Concluído',
+              message: `Ótima notícia! O serviço da OS #${os.id} foi concluído com sucesso. O veículo está pronto para retirada e pagamento.`
+          };
+      } else if (type === OSStatus.PAID) {
+          notif = {
+              channel: 'EMAIL',
+              title: 'Emissão de Recibo/NF',
+              message: `Obrigado por escolher a OSMech! Sua Nota Fiscal/Recibo da OS #${os.id} foi enviada para o seu e-mail.`
+          };
+      } else if (type === OSStatus.WAITING_PARTS) {
+           const partName = os.aiDiagnosis?.recommendedParts[0]?.name || "peças de reposição";
+           const resumeDate = new Date(Date.now() + 172800000); // +2 days
+
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Aguardando Peças',
+              message: `Atenção: A manutenção da OS #${os.id} está pausada, pois estamos aguardando a chegada da peça [${partName}]. Previsão de retomada: ${resumeDate.toLocaleDateString()}.`
+          };
+      } else if (type === 'PREVENTIVE') {
+          // Extracts main keyword from preventive maintenance suggestion or uses generic
+          const item = os.aiDiagnosis?.preventiveMaintenance || "manutenção preventiva";
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Lembrete de Manutenção (IA)',
+              message: `Lembrete: A OSMech recomenda a "${item}" do seu veículo ${os.vehicleModel} nos próximos 30 dias, conforme a KM. Agende aqui: https://osmech.app/agendar`
+          };
+      } else {
+          return null; // No notification for other statuses
+      }
+
+      return { ...notif, title: notif.title || 'Notificação', message: notif.message || '', channel: notif.channel || 'SMS' } as CustomerNotification;
+  };
 
   // --- Navigation Items ---
   const navItems = useMemo(() => {
@@ -257,7 +339,7 @@ export default function App() {
                 <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                     {chartDataStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#f59e0b', '#a855f7', '#f97316', '#3b82f6', '#22c55e', '#64748b'][index % 6]} />
+                        <Cell key={`cell-${index}`} fill={['#f59e0b', '#a855f7', '#f97316', '#dc2626', '#3b82f6', '#22c55e', '#64748b'][index % 7] || '#888'} />
                     ))}
                 </Bar>
               </BarChart>
@@ -643,7 +725,8 @@ export default function App() {
       complaint: '',
       status: OSStatus.PENDING,
       laborCost: 0,
-      partsCost: 0
+      partsCost: 0,
+      acceptsNotifications: true
     });
 
     const handleDiagnose = async () => {
@@ -677,7 +760,8 @@ export default function App() {
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      const newOS: ServiceOrder = {
+      
+      let newOS: ServiceOrder = {
         id: `OS-${new Date().getFullYear()}-${1000 + orders.length + 1}`,
         customerName: formData.customerName || 'Cliente',
         customerCpf: formData.customerCpf,
@@ -692,9 +776,17 @@ export default function App() {
         laborCost: Number(formData.laborCost) || 0,
         partsCost: Number(formData.partsCost) || 0,
         totalCost: (Number(formData.laborCost) || 0) + (Number(formData.partsCost) || 0),
+        acceptsNotifications: formData.acceptsNotifications,
+        notifications: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+
+      // Trigger Create Notification
+      const initialNotif = generateNotification(newOS, 'CREATED');
+      if (initialNotif) {
+          newOS.notifications = [initialNotif];
+      }
       
       setOrders(prev => [newOS, ...prev]);
       addLog('CREATE', `Criou OS ${newOS.id}`, newOS.id);
@@ -738,6 +830,18 @@ export default function App() {
                       <input required type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm col-span-2" placeholder="Telefone" 
                           value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}
                       />
+                      <div className="col-span-2 flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg">
+                          <input 
+                              type="checkbox" 
+                              id="acceptsNotifications"
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              checked={formData.acceptsNotifications}
+                              onChange={e => setFormData({...formData, acceptsNotifications: e.target.checked})}
+                          />
+                          <label htmlFor="acceptsNotifications" className="text-xs text-blue-800 font-medium cursor-pointer">
+                              Cliente autoriza notificações via WhatsApp/SMS (LGPD)
+                          </label>
+                      </div>
                   </div>
                 </div>
               </div>
@@ -813,6 +917,7 @@ export default function App() {
 
       const [os, setOs] = useState<ServiceOrder>(selectedOS);
       const [editMode, setEditMode] = useState(false);
+      const [activeTab, setActiveTab] = useState<'DETAILS' | 'MESSAGES'>('DETAILS');
 
       const handleSave = () => {
           const updated: ServiceOrder = {
@@ -828,8 +933,31 @@ export default function App() {
       };
 
       const changeStatus = (newStatus: OSStatus) => {
-          setOs({...os, status: newStatus});
+          let updatedOS = {...os, status: newStatus};
+          
+          // Generate automated notification
+          const notification = generateNotification(updatedOS, newStatus);
+          if (notification) {
+              const currentNotifications = updatedOS.notifications || [];
+              updatedOS.notifications = [notification, ...currentNotifications];
+          }
+
+          setOs(updatedOS);
       };
+
+      const sendPreventiveReminder = () => {
+          const notification = generateNotification(os, 'PREVENTIVE');
+          if (notification) {
+              const currentNotifications = os.notifications || [];
+              setOs({
+                  ...os,
+                  notifications: [notification, ...currentNotifications]
+              });
+              alert("Lembrete Preventivo enviado com sucesso!");
+          } else {
+              alert("Cliente não autorizou notificações ou não há dados preventivos.");
+          }
+      }
 
       return (
           <div className="space-y-6 animate-fade-in pb-10">
@@ -854,152 +982,251 @@ export default function App() {
                   </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left Column: Details & Technical */}
-                  <div className="lg:col-span-2 space-y-6">
-                      <Card title="Dados do Serviço">
-                          <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                              <div>
-                                  <label className="block text-xs font-bold text-slate-400 uppercase">Cliente</label>
-                                  <div className="text-slate-800 font-medium text-lg">{os.customerName}</div>
-                                  <div className="text-slate-500">{os.phone}</div>
-                                  {os.customerCpf && <div className="text-xs text-slate-400 mt-1">CPF: {os.customerCpf}</div>}
-                              </div>
-                              <div>
-                                  <label className="block text-xs font-bold text-slate-400 uppercase">Veículo</label>
-                                  <div className="text-slate-800 font-medium text-lg">{os.vehicleModel}</div>
-                                  <div className="flex gap-2">
-                                     <div className="text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded">{os.plate}</div>
-                                     {os.currentMileage && <div className="text-slate-500 bg-slate-100 inline-block px-1 rounded">{os.currentMileage} km</div>}
-                                  </div>
-                              </div>
-                              <div className="col-span-2 pt-4 border-t border-slate-100">
-                                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reclamação do Cliente</label>
-                                  <p className="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">"{os.complaint}"</p>
-                              </div>
-                              <div className="col-span-2">
-                                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Notas do Mecânico (Técnico)</label>
-                                  {editMode ? (
-                                      <textarea 
-                                        className="w-full p-3 border border-slate-300 rounded-lg"
-                                        rows={4}
-                                        value={os.mechanicNotes || ''}
-                                        onChange={e => setOs({...os, mechanicNotes: e.target.value})}
-                                        placeholder="Descreva o serviço realizado, observações técnicas..."
-                                      />
-                                  ) : (
-                                      <p className="text-slate-700 whitespace-pre-wrap">{os.mechanicNotes || 'Nenhuma observação registrada.'}</p>
-                                  )}
-                              </div>
-                              
-                              <div className="col-span-2 border-t border-slate-100 pt-4">
-                                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mecânico Responsável</label>
-                                  {editMode ? (
-                                      <select 
-                                        className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                                        value={os.assignedMechanicId || ''}
-                                        onChange={e => setOs({...os, assignedMechanicId: e.target.value})}
-                                      >
-                                          <option value="">Selecione...</option>
-                                          {MOCK_USERS.filter(u => u.role === 'MECHANIC').map(u => (
-                                              <option key={u.id} value={u.id}>{u.name}</option>
-                                          ))}
-                                      </select>
-                                  ) : (
-                                      <div className="flex items-center gap-2">
-                                          {os.assignedMechanicId ? (
-                                              <>
-                                                 <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold">
-                                                     {MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.avatar}
-                                                 </div>
-                                                 <span>{MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name}</span>
-                                              </>
-                                          ) : <span className="text-slate-400 italic">Não atribuído</span>}
-                                      </div>
-                                  )}
-                              </div>
-                          </div>
-                      </Card>
-
-                      {os.aiDiagnosis && (
-                          <Card title="Inteligência Preditiva (IA)" className="border-l-4 border-l-purple-500">
-                              <div className="flex gap-4 items-start">
-                                  <div className="bg-purple-100 p-2 rounded-full text-purple-600 mt-1"><ShieldCheck size={20}/></div>
-                                  <div>
-                                      <h4 className="font-bold text-slate-800 mb-1">Recomendação de Manutenção Preventiva (UC006)</h4>
-                                      <p className="text-slate-600 text-sm leading-relaxed">{os.aiDiagnosis.preventiveMaintenance}</p>
-                                  </div>
-                              </div>
-                          </Card>
-                      )}
-                  </div>
-
-                  {/* Right Column: Status & Finance */}
-                  <div className="space-y-6">
-                      <Card title="Fluxo de Trabalho">
-                          <div className="space-y-3">
-                             <p className="text-xs text-slate-500 uppercase font-bold">Alterar Status</p>
-                             <div className="flex flex-col gap-2">
-                                 {[OSStatus.PENDING, OSStatus.DIAGNOSING, OSStatus.APPROVAL, OSStatus.IN_PROGRESS, OSStatus.COMPLETED].map(s => (
-                                     <button 
-                                        key={s} 
-                                        disabled={!editMode}
-                                        onClick={() => changeStatus(s)}
-                                        className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${os.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
-                                     >
-                                        {s}
-                                     </button>
-                                 ))}
-                             </div>
-                          </div>
-                      </Card>
-
-                      <Card title="Financeiro (UC005)">
-                          <div className="space-y-4">
-                              <div className="flex justify-between items-center">
-                                  <span className="text-slate-600 text-sm">Mão de Obra</span>
-                                  {editMode && isAdmin ? (
-                                      <input type="number" className="w-24 p-1 text-right border rounded" value={os.laborCost} onChange={e => setOs({...os, laborCost: Number(e.target.value)})} />
-                                  ) : (
-                                      <span className="font-mono">R$ {os.laborCost.toFixed(2)}</span>
-                                  )}
-                              </div>
-                              <div className="flex justify-between items-center">
-                                  <span className="text-slate-600 text-sm">Peças</span>
-                                  {editMode && isAdmin ? (
-                                      <input type="number" className="w-24 p-1 text-right border rounded" value={os.partsCost} onChange={e => setOs({...os, partsCost: Number(e.target.value)})} />
-                                  ) : (
-                                      <span className="font-mono">R$ {os.partsCost.toFixed(2)}</span>
-                                  )}
-                              </div>
-                              <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
-                                  <span className="font-bold text-slate-800">TOTAL</span>
-                                  <span className="font-bold text-xl text-green-600">R$ {(os.laborCost + os.partsCost).toFixed(2)}</span>
-                              </div>
-
-                              {/* Payment Section - Admin Only */}
-                              {isAdmin && (
-                                  <div className="pt-4 mt-4 border-t border-slate-100 bg-slate-50 -mx-6 px-6 -mb-6 pb-6">
-                                      <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><CreditCard size={14}/> Pagamento</h4>
-                                      {os.status === OSStatus.PAID ? (
-                                          <div className="bg-green-100 text-green-800 p-3 rounded-lg text-center text-sm font-medium border border-green-200">
-                                              Pagamento Confirmado
-                                          </div>
-                                      ) : (
-                                          <button 
-                                            disabled={!editMode}
-                                            onClick={() => changeStatus(OSStatus.PAID)}
-                                            className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-                                          >
-                                              Registrar Pagamento
-                                          </button>
-                                      )}
-                                  </div>
-                              )}
-                          </div>
-                      </Card>
-                  </div>
+              {/* Tabs */}
+              <div className="flex border-b border-slate-200 mb-6">
+                  <button 
+                    onClick={() => setActiveTab('DETAILS')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'DETAILS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                  >
+                      Detalhes do Serviço
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('MESSAGES')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'MESSAGES' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                  >
+                      Comunicação com Cliente <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-xs">{os.notifications?.length || 0}</span>
+                  </button>
               </div>
+
+              {activeTab === 'DETAILS' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+                    {/* Left Column: Details & Technical */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <Card title="Dados do Serviço">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase">Cliente</label>
+                                    <div className="text-slate-800 font-medium text-lg">{os.customerName}</div>
+                                    <div className="text-slate-500">{os.phone}</div>
+                                    {os.customerCpf && <div className="text-xs text-slate-400 mt-1">CPF: {os.customerCpf}</div>}
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase">Veículo</label>
+                                    <div className="text-slate-800 font-medium text-lg">{os.vehicleModel}</div>
+                                    <div className="flex gap-2">
+                                    <div className="text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded">{os.plate}</div>
+                                    {os.currentMileage && <div className="text-slate-500 bg-slate-100 inline-block px-1 rounded">{os.currentMileage} km</div>}
+                                    </div>
+                                </div>
+                                <div className="col-span-2 pt-4 border-t border-slate-100">
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reclamação do Cliente</label>
+                                    <p className="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">"{os.complaint}"</p>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Notas do Mecânico (Técnico)</label>
+                                    {editMode ? (
+                                        <textarea 
+                                            className="w-full p-3 border border-slate-300 rounded-lg"
+                                            rows={4}
+                                            value={os.mechanicNotes || ''}
+                                            onChange={e => setOs({...os, mechanicNotes: e.target.value})}
+                                            placeholder="Descreva o serviço realizado, observações técnicas..."
+                                        />
+                                    ) : (
+                                        <p className="text-slate-700 whitespace-pre-wrap">{os.mechanicNotes || 'Nenhuma observação registrada.'}</p>
+                                    )}
+                                </div>
+                                
+                                <div className="col-span-2 border-t border-slate-100 pt-4">
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mecânico Responsável</label>
+                                    {editMode ? (
+                                        <select 
+                                            className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                                            value={os.assignedMechanicId || ''}
+                                            onChange={e => setOs({...os, assignedMechanicId: e.target.value})}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {MOCK_USERS.filter(u => u.role === 'MECHANIC').map(u => (
+                                                <option key={u.id} value={u.id}>{u.name}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            {os.assignedMechanicId ? (
+                                                <>
+                                                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold">
+                                                        {MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.avatar}
+                                                    </div>
+                                                    <span>{MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name}</span>
+                                                </>
+                                            ) : <span className="text-slate-400 italic">Não atribuído</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+
+                        {os.aiDiagnosis && (
+                            <Card title="Inteligência Preditiva (IA)" className="border-l-4 border-l-purple-500">
+                                <div className="flex gap-4 items-start">
+                                    <div className="bg-purple-100 p-2 rounded-full text-purple-600 mt-1"><ShieldCheck size={20}/></div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 mb-1">Recomendação de Manutenção Preventiva (UC006)</h4>
+                                        <p className="text-slate-600 text-sm leading-relaxed">{os.aiDiagnosis.preventiveMaintenance}</p>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+
+                    {/* Right Column: Status & Finance */}
+                    <div className="space-y-6">
+                        <Card title="Fluxo de Trabalho">
+                            <div className="space-y-3">
+                                <p className="text-xs text-slate-500 uppercase font-bold">Alterar Status</p>
+                                <div className="flex flex-col gap-2">
+                                    {[OSStatus.PENDING, OSStatus.DIAGNOSING, OSStatus.APPROVAL, OSStatus.WAITING_PARTS, OSStatus.IN_PROGRESS, OSStatus.COMPLETED].map(s => (
+                                        <button 
+                                            key={s} 
+                                            disabled={!editMode}
+                                            onClick={() => changeStatus(s)}
+                                            className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${os.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                            {s}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card title="Financeiro (UC005)">
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-600 text-sm">Mão de Obra</span>
+                                    {editMode && isAdmin ? (
+                                        <input type="number" className="w-24 p-1 text-right border rounded" value={os.laborCost} onChange={e => setOs({...os, laborCost: Number(e.target.value)})} />
+                                    ) : (
+                                        <span className="font-mono">R$ {os.laborCost.toFixed(2)}</span>
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-600 text-sm">Peças</span>
+                                    {editMode && isAdmin ? (
+                                        <input type="number" className="w-24 p-1 text-right border rounded" value={os.partsCost} onChange={e => setOs({...os, partsCost: Number(e.target.value)})} />
+                                    ) : (
+                                        <span className="font-mono">R$ {os.partsCost.toFixed(2)}</span>
+                                    )}
+                                </div>
+                                <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
+                                    <span className="font-bold text-slate-800">TOTAL</span>
+                                    <span className="font-bold text-xl text-green-600">R$ {(os.laborCost + os.partsCost).toFixed(2)}</span>
+                                </div>
+
+                                {/* Payment Section - Admin Only */}
+                                {isAdmin && (
+                                    <div className="pt-4 mt-4 border-t border-slate-100 bg-slate-50 -mx-6 px-6 -mb-6 pb-6">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><CreditCard size={14}/> Pagamento</h4>
+                                        {os.status === OSStatus.PAID ? (
+                                            <div className="bg-green-100 text-green-800 p-3 rounded-lg text-center text-sm font-medium border border-green-200">
+                                                Pagamento Confirmado
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                disabled={!editMode}
+                                                onClick={() => changeStatus(OSStatus.PAID)}
+                                                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                                            >
+                                                Registrar Pagamento
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                </div>
+              ) : (
+                <div className="animate-fade-in grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px]">
+                    {/* Message List */}
+                    <Card title="Histórico de Notificações" className="md:col-span-2 h-full flex flex-col relative">
+                        {(!os.notifications || os.notifications.length === 0) ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                                <MessageCircle size={48} className="mb-2 opacity-20" />
+                                <p>Nenhuma notificação enviada para este cliente.</p>
+                            </div>
+                        ) : (
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+                                {os.notifications.map(n => (
+                                    <div key={n.id} className="flex gap-4 p-4 border border-slate-100 rounded-xl bg-slate-50 relative group">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                                            n.channel === 'WHATSAPP' ? 'bg-green-100 text-green-600' : 
+                                            n.channel === 'EMAIL' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                                        }`}>
+                                            {n.channel === 'WHATSAPP' ? <MessageCircle size={20} /> : n.channel === 'EMAIL' ? <Mail size={20} /> : <Smartphone size={20} />}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h4 className="font-bold text-slate-800 text-sm">{n.title}</h4>
+                                                <span className="text-[10px] text-slate-400">{new Date(n.sentAt).toLocaleDateString()} {new Date(n.sentAt).toLocaleTimeString().slice(0,5)}</span>
+                                            </div>
+                                            <p className="text-sm text-slate-600 leading-relaxed">{n.message}</p>
+                                            <div className="mt-2 flex gap-2">
+                                                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                                     {n.channel}
+                                                 </span>
+                                                 {n.read && <span className="text-[10px] text-blue-500 font-medium flex items-center gap-1"><CheckCircle size={10}/> Lido</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 flex items-center gap-2">
+                            <Bot size={16} />
+                            As notificações são enviadas automaticamente com base na mudança de status.
+                        </div>
+                    </Card>
+
+                    {/* Actions Panel */}
+                    <div className="space-y-6">
+                        <Card title="Ações de Comunicação">
+                             <div className="space-y-4">
+                                 <div className={`p-3 rounded-lg border text-sm ${os.acceptsNotifications ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                     <strong>Status LGPD:</strong> {os.acceptsNotifications ? 'Cliente Autorizou Notificações' : 'Cliente NÃO Autorizou Notificações'}
+                                 </div>
+                                 
+                                 {os.aiDiagnosis && (
+                                     <button 
+                                        onClick={sendPreventiveReminder}
+                                        disabled={!os.acceptsNotifications}
+                                        className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-purple-200"
+                                     >
+                                         <Bell size={16}/> Enviar Lembrete Preventivo (IA)
+                                     </button>
+                                 )}
+
+                                 <p className="text-xs text-slate-500 text-center pt-2 border-t border-slate-100">
+                                     O lembrete preventivo usa a sugestão da IA para criar uma mensagem personalizada.
+                                 </p>
+                             </div>
+                        </Card>
+
+                        <Card title="Envio Manual (Simulado)">
+                             <div className="space-y-3">
+                                 <textarea className="w-full p-3 border border-slate-300 rounded-lg text-sm h-24" placeholder="Digite a mensagem..."></textarea>
+                                 <div className="flex gap-2">
+                                     <button disabled={!os.acceptsNotifications} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                                         <MessageCircle size={16}/> WhatsApp
+                                     </button>
+                                     <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                                         <Mail size={16}/> E-mail
+                                     </button>
+                                 </div>
+                             </div>
+                        </Card>
+                    </div>
+                </div>
+              )}
           </div>
       )
   }

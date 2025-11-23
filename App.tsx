@@ -34,12 +34,24 @@ import {
   Send,
   Bell,
   ExternalLink,
-  Copy
+  Copy,
+  Wallet
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
-import { ServiceOrder, OSStatus, ViewState, User, AIDiagnosisResult, UserRole, AuditLogEntry, CustomerNotification } from './types';
+import { 
+    ServiceOrder, 
+    OSStatus, 
+    ViewState, 
+    User, 
+    AIDiagnosisResult, 
+    UserRole, 
+    AuditLogEntry, 
+    CustomerNotification,
+    CreateOSInput,
+    PaymentInput 
+} from './types';
 import { getMechanicDiagnosis, getShopAssistantChat } from './services/geminiService';
 import { Card, StatCard } from './components/Card';
 import { StatusBadge } from './components/StatusBadge';
@@ -67,6 +79,8 @@ const INITIAL_DATA: ServiceOrder[] = [
     partsCost: 1200,
     laborCost: 450,
     totalCost: 1650,
+    paymentMethod: 'PIX',
+    paymentDate: new Date(Date.now() - 86400000 * 2).toISOString(),
     aiDiagnosis: {
         possibleCauses: ['Filtro de diesel obstruído', 'Problema na válvula EGR', 'Turbina com baixa pressão'],
         diagnosisSteps: ['Verificar pressão da turbina', 'Scanear códigos de injeção', 'Inspecionar filtro de ar e diesel'],
@@ -210,6 +224,116 @@ export default function App() {
       return { ...notif, title: notif.title || 'Notificação', message: notif.message || '', channel: notif.channel || 'SMS' } as CustomerNotification;
   };
 
+  // --- MUTATIONS IMPLEMENTATION (Controller Layer) ---
+
+  // UC001: criarOS
+  const createServiceOrder = (input: CreateOSInput) => {
+    const newOS: ServiceOrder = {
+        id: `OS-${new Date().getFullYear()}-${1000 + orders.length + 1}`,
+        customerName: input.customerName || 'Cliente',
+        customerCpf: input.customerCpf,
+        phone: input.phone || '',
+        vehicleModel: input.vehicleModel || '',
+        plate: input.plate || '',
+        currentMileage: input.currentMileage,
+        complaint: input.complaint || '',
+        status: input.initialStatus || OSStatus.PENDING,
+        aiDiagnosis: input.aiDiagnosis, // UC006: Registrar Diagnóstico
+        mechanicNotes: '',
+        laborCost: input.estimatedLaborCost || 0,
+        partsCost: input.estimatedPartsCost || 0,
+        totalCost: (input.estimatedLaborCost || 0) + (input.estimatedPartsCost || 0),
+        acceptsNotifications: input.acceptsNotifications,
+        notifications: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+
+    // Trigger Notification
+    const initialNotif = generateNotification(newOS, 'CREATED');
+    if (initialNotif) {
+        newOS.notifications = [initialNotif];
+    }
+    
+    setOrders(prev => [newOS, ...prev]);
+    addLog('CREATE', `Criou OS ${newOS.id} - ${newOS.vehicleModel}`, newOS.id);
+    return newOS;
+  };
+
+  // UC003: atualizarStatusOS
+  const updateServiceOrderStatus = (osId: string, newStatus: OSStatus) => {
+    let updatedOS: ServiceOrder | null = null;
+
+    setOrders(prev => prev.map(o => {
+        if (o.id === osId) {
+            updatedOS = { ...o, status: newStatus, updatedAt: new Date().toISOString() };
+            // Generate notification
+            const notification = generateNotification(updatedOS, newStatus);
+            if (notification) {
+                updatedOS.notifications = [notification, ...(o.notifications || [])];
+            }
+            return updatedOS;
+        }
+        return o;
+    }));
+
+    if(updatedOS) {
+        addLog('UPDATE', `Alterou status OS ${osId} para ${newStatus}`, osId);
+        // If current selected is this one, update it
+        if(selectedOS?.id === osId) {
+            setSelectedOS(updatedOS);
+        }
+    }
+  };
+
+  // UC003: atribuirMecanico
+  const assignMechanic = (osId: string, mechanicId: string) => {
+      setOrders(prev => prev.map(o => {
+          if (o.id === osId) {
+             return { ...o, assignedMechanicId: mechanicId, updatedAt: new Date().toISOString() };
+          }
+          return o;
+      }));
+      const mechName = MOCK_USERS.find(u => u.id === mechanicId)?.name || mechanicId;
+      addLog('UPDATE', `Atribuiu mecânico ${mechName} à OS ${osId}`, osId);
+  };
+
+  // UC005: registrarPagamento
+  const registerPayment = (osId: string, input: PaymentInput) => {
+      setOrders(prev => prev.map(o => {
+          if (o.id === osId) {
+              const updated = { 
+                  ...o, 
+                  status: OSStatus.PAID, 
+                  paymentMethod: input.method,
+                  paymentDate: new Date().toISOString(),
+                  updatedAt: new Date().toISOString() 
+              };
+               // Generate notification (NF/Receipt)
+               const notification = generateNotification(updated, OSStatus.PAID);
+               if (notification) {
+                   updated.notifications = [notification, ...(o.notifications || [])];
+               }
+               return updated;
+          }
+          return o;
+      }));
+      const noteDetails = input.notes ? ` Obs: ${input.notes}` : '';
+      addLog('FINANCE', `Recebeu pagamento R$ ${input.amount} (${input.method}) da OS ${osId}.${noteDetails}`, osId);
+  };
+
+  // UC004: excluirOS
+  const deleteServiceOrder = (osId: string, adminPassword: string): boolean => {
+      if (adminPassword !== "admin123") {
+          return false;
+      }
+
+      setOrders(prev => prev.filter(o => o.id !== osId));
+      addLog('DELETE', `Exclusão Permanente da OS ${osId}`, osId);
+      return true;
+  };
+
+  // --- Interaction Helpers ---
   const openWhatsApp = (phone: string, text: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
     const encodedText = encodeURIComponent(text);
@@ -237,7 +361,6 @@ export default function App() {
 
   // --- Statistics Calculation ---
   const stats = useMemo(() => {
-    // UC 4.1: Faturamento Mensal (Monthly Revenue)
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
 
@@ -260,7 +383,6 @@ export default function App() {
     return { monthlyRevenue, active, completed, conversionRate };
   }, [orders]);
 
-  // UC 4.1: OSs Abertas vs Fechadas
   const chartOpenVsClosed = useMemo(() => {
       const openCount = orders.filter(o => ![OSStatus.COMPLETED, OSStatus.PAID, 'Cancelada'].includes(o.status)).length;
       const closedCount = orders.filter(o => [OSStatus.COMPLETED, OSStatus.PAID].includes(o.status)).length;
@@ -299,13 +421,10 @@ export default function App() {
       const stats: Record<string, { totalHours: number; count: number }> = {};
       
       orders.forEach(o => {
-          // Consider COMPLETED or PAID for average calculation
           if ((o.status === OSStatus.COMPLETED || o.status === OSStatus.PAID) && o.assignedMechanicId) {
               const mech = MOCK_USERS.find(u => u.id === o.assignedMechanicId);
               const name = mech?.name.split(' ')[0] || 'Desconhecido';
               
-              // Simulating time based on Labor Cost (e.g., R$ 120/hour for estimation)
-              // Since we don't have explicit time logs in this MVP data structure
               const estimatedHours = o.laborCost > 0 ? o.laborCost / 120 : 1; 
 
               if (!stats[name]) stats[name] = { totalHours: 0, count: 0 };
@@ -373,7 +492,6 @@ export default function App() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* UC 4.1: OSs Abertas vs Fechadas */}
         <Card title="Status Geral (Abertas vs Fechadas)">
             <div className="h-64 w-full flex justify-center relative">
                 <ResponsiveContainer width="100%" height="100%">
@@ -388,8 +506,8 @@ export default function App() {
                             dataKey="value"
                             label={({name, percent}) => `${name} ${percent}%`}
                         >
-                            <Cell key="cell-0" fill="#3b82f6" /> {/* Abertas - Blue */}
-                            <Cell key="cell-1" fill="#64748b" /> {/* Fechadas - Slate */}
+                            <Cell key="cell-0" fill="#3b82f6" /> 
+                            <Cell key="cell-1" fill="#64748b" /> 
                         </Pie>
                         <Tooltip />
                         <Legend />
@@ -417,7 +535,6 @@ export default function App() {
         </Card>
       </div>
 
-      {/* New Row: TMA Chart */}
       <div className="grid grid-cols-1 gap-6">
           <Card title="Tempo Médio de Serviço (TMA) por Mecânico (Horas)">
             <div className="h-64 w-full">
@@ -440,77 +557,13 @@ export default function App() {
     </div>
   );
 
-  const ReportsView = () => (
-      <div className="space-y-6 animate-fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card title="Composição de Faturamento (Peças vs MO)">
-                  <div className="h-64 w-full flex justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <RePieChart>
-                            <Pie
-                                data={chartRevenueBreakdown}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                <Cell key="cell-0" fill="#3b82f6" />
-                                <Cell key="cell-1" fill="#f59e0b" />
-                            </Pie>
-                            <Tooltip />
-                            <Legend />
-                        </RePieChart>
-                    </ResponsiveContainer>
-                  </div>
-              </Card>
-              <Card title="Logs de Auditoria (Segurança)" className="overflow-hidden">
-                  <div className="h-64 overflow-y-auto">
-                      <table className="w-full text-xs text-left">
-                          <thead className="bg-slate-50 sticky top-0">
-                              <tr>
-                                  <th className="p-2 border-b">Data</th>
-                                  <th className="p-2 border-b">Usuário</th>
-                                  <th className="p-2 border-b">Ação</th>
-                                  <th className="p-2 border-b">Detalhes</th>
-                              </tr>
-                          </thead>
-                          <tbody>
-                              {logs.map(log => (
-                                  <tr key={log.id} className="border-b border-slate-50 hover:bg-slate-50">
-                                      <td className="p-2 text-slate-500">{new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString().slice(0,5)}</td>
-                                      <td className="p-2 font-medium text-slate-700">{log.userName}</td>
-                                      <td className="p-2">
-                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                              log.action === 'DELETE' ? 'bg-red-100 text-red-700' : 
-                                              log.action === 'CREATE' ? 'bg-green-100 text-green-700' :
-                                              'bg-blue-100 text-blue-700'
-                                          }`}>
-                                              {log.action}
-                                          </span>
-                                      </td>
-                                      <td className="p-2 text-slate-600 truncate max-w-[150px]" title={log.details}>{log.details}</td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
-              </Card>
-          </div>
-      </div>
-  );
-
   const OSListView = () => {
-    // -- Advanced Search State --
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedStatuses, setSelectedStatuses] = useState<OSStatus[]>([]);
     const [mechanicId, setMechanicId] = useState<string>('ALL');
     const [dateRange, setDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
     const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
-    // Initialize Mechanic Filter based on Role
     useEffect(() => {
         if (!isAdmin && user) {
             setMechanicId(user.id);
@@ -533,9 +586,7 @@ export default function App() {
         );
     }
     
-    // -- Filter Logic --
     const filteredOrders = orders.filter(o => {
-      // 1. Identification Search (Name, Plate, ID, CPF)
       const term = searchTerm.toLowerCase();
       const matchesSearch = 
         o.customerName.toLowerCase().includes(term) ||
@@ -543,17 +594,13 @@ export default function App() {
         o.id.toLowerCase().includes(term) ||
         (o.customerCpf && o.customerCpf.includes(term));
       
-      // 2. Status (Multiple)
       const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(o.status);
-      
-      // 3. Mechanic (Responsible)
       const matchesMechanic = mechanicId === 'ALL' || o.assignedMechanicId === mechanicId;
 
-      // 4. Period (Creation Date)
       const targetDate = new Date(o.createdAt);
       const start = dateRange.start ? new Date(dateRange.start) : null;
       const end = dateRange.end ? new Date(dateRange.end) : null;
-      if (end) end.setHours(23, 59, 59); // Include full end day
+      if (end) end.setHours(23, 59, 59);
 
       const matchesDate = (!start || targetDate >= start) && (!end || targetDate <= end);
       
@@ -565,7 +612,7 @@ export default function App() {
         setCurrentView('OS_DETAILS');
     }
 
-    // -- Secure Deletion (UC004) --
+    // Call Mutation: excluirOS
     const handleDelete = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         if (!isAdmin) {
@@ -576,26 +623,19 @@ export default function App() {
         const osToDelete = orders.find(o => o.id === id);
         if (!osToDelete) return;
 
-        // Step 1: Status Validation
         if (osToDelete.status === OSStatus.PAID) {
              alert("ERRO DE SEGURANÇA: Não é possível excluir OS com status 'Finalizado/Pago' para manter a integridade fiscal.");
              return;
         }
 
-        // Step 2: Access Confirmation (Password)
         const pwd = prompt("ÁREA DE SEGURANÇA (UC004)\n\nDigite a senha de administrador para confirmar a exclusão permanente:");
-        if (pwd === "admin123") {
-             // Step 3: Audit Log
-             const logId = Math.random().toString(36).substr(2, 9).toUpperCase();
-             addLog('DELETE', `Exclusão Segura da OS ${id}`, id, logId);
-             
-             // Step 4: Execution
-             setOrders(prev => prev.filter(o => o.id !== id));
-             
-             // Step 5: Notification
-             alert(`SUCESSO: Ordem de Serviço excluída.\n\nUm registro de auditoria foi criado.\nID do Log: ${logId}`);
-        } else if (pwd !== null) {
-            alert("Senha incorreta. Ação bloqueada.");
+        if (pwd) {
+             const success = deleteServiceOrder(id, pwd);
+             if (success) {
+                 alert(`SUCESSO: Ordem de Serviço excluída.`);
+             } else {
+                 alert("Senha incorreta. Ação bloqueada.");
+             }
         }
     }
 
@@ -791,7 +831,7 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [aiResult, setAiResult] = useState<AIDiagnosisResult | null>(null);
     
-    const [formData, setFormData] = useState<Partial<ServiceOrder>>({
+    const [formData, setFormData] = useState<Partial<CreateOSInput>>({
       customerName: '',
       customerCpf: '',
       phone: '',
@@ -799,9 +839,9 @@ export default function App() {
       plate: '',
       currentMileage: undefined,
       complaint: '',
-      status: OSStatus.PENDING,
-      laborCost: 0,
-      partsCost: 0,
+      initialStatus: OSStatus.PENDING,
+      estimatedLaborCost: 0,
+      estimatedPartsCost: 0,
       acceptsNotifications: true
     });
 
@@ -823,9 +863,9 @@ export default function App() {
         
         setFormData(prev => ({ 
             ...prev, 
-            status: OSStatus.DIAGNOSING,
-            partsCost: suggestedPartsCost,
-            laborCost: suggestedLaborCost,
+            initialStatus: OSStatus.DIAGNOSING,
+            estimatedPartsCost: suggestedPartsCost,
+            estimatedLaborCost: suggestedLaborCost,
             aiDiagnosis: result
         }));
       } else {
@@ -837,35 +877,23 @@ export default function App() {
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       
-      let newOS: ServiceOrder = {
-        id: `OS-${new Date().getFullYear()}-${1000 + orders.length + 1}`,
-        customerName: formData.customerName || 'Cliente',
-        customerCpf: formData.customerCpf,
-        phone: formData.phone || '',
-        vehicleModel: formData.vehicleModel || '',
-        plate: formData.plate || '',
-        currentMileage: formData.currentMileage,
-        complaint: formData.complaint || '',
-        status: formData.status || OSStatus.PENDING,
-        aiDiagnosis: aiResult || undefined,
-        mechanicNotes: '',
-        laborCost: Number(formData.laborCost) || 0,
-        partsCost: Number(formData.partsCost) || 0,
-        totalCost: (Number(formData.laborCost) || 0) + (Number(formData.partsCost) || 0),
-        acceptsNotifications: formData.acceptsNotifications,
-        notifications: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      // Call Mutation: criarOS
+      const input: CreateOSInput = {
+          customerName: formData.customerName!,
+          customerCpf: formData.customerCpf,
+          phone: formData.phone!,
+          vehicleModel: formData.vehicleModel!,
+          plate: formData.plate!,
+          currentMileage: formData.currentMileage,
+          complaint: formData.complaint!,
+          acceptsNotifications: formData.acceptsNotifications!,
+          aiDiagnosis: aiResult || undefined,
+          initialStatus: formData.initialStatus,
+          estimatedLaborCost: formData.estimatedLaborCost,
+          estimatedPartsCost: formData.estimatedPartsCost
       };
 
-      // Trigger Create Notification
-      const initialNotif = generateNotification(newOS, 'CREATED');
-      if (initialNotif) {
-          newOS.notifications = [initialNotif];
-      }
-      
-      setOrders(prev => [newOS, ...prev]);
-      addLog('CREATE', `Criou OS ${newOS.id}`, newOS.id);
+      const newOS = createServiceOrder(input);
       setSelectedOS(newOS);
       setCurrentView('OS_DETAILS'); // Go to details immediately
     };
@@ -995,40 +1023,49 @@ export default function App() {
       const [editMode, setEditMode] = useState(false);
       const [activeTab, setActiveTab] = useState<'DETAILS' | 'MESSAGES'>('DETAILS');
 
+      // Call Mutation: updateServiceOrderStatus (Implicitly done when saving if status changed, 
+      // but here we are using a simplified 'save' that handles notes and costs. 
+      // Status changes are handled by the buttons below)
       const handleSave = () => {
-          const updated: ServiceOrder = {
-              ...os,
-              totalCost: os.laborCost + os.partsCost,
-              updatedAt: new Date().toISOString()
-          };
-          setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-          addLog('UPDATE', `Editou OS ${updated.id}`, updated.id);
-          setSelectedOS(updated);
+          // This is a partial update for costs/notes
+          setOrders(prev => prev.map(o => o.id === selectedOS.id ? selectedOS : o));
+          addLog('UPDATE', `Editou Detalhes OS ${selectedOS.id}`, selectedOS.id);
           setEditMode(false);
           alert('OS Atualizada com sucesso!');
       };
 
+      // Call Mutation: atualizarStatusOS
       const changeStatus = (newStatus: OSStatus) => {
-          let updatedOS = {...os, status: newStatus};
-          
-          // Generate automated notification
-          const notification = generateNotification(updatedOS, newStatus);
-          if (notification) {
-              const currentNotifications = updatedOS.notifications || [];
-              updatedOS.notifications = [notification, ...currentNotifications];
-          }
-
-          setOs(updatedOS);
+         updateServiceOrderStatus(selectedOS.id, newStatus);
       };
 
-      const sendPreventiveReminder = () => {
-          const notification = generateNotification(os, 'PREVENTIVE');
-          if (notification) {
-              const currentNotifications = os.notifications || [];
-              setOs({
-                  ...os,
-                  notifications: [notification, ...currentNotifications]
+      // Call Mutation: atribuirMecanico
+      const handleAssignMechanic = (e: React.ChangeEvent<HTMLSelectElement>) => {
+         assignMechanic(selectedOS.id, e.target.value);
+      }
+
+      // Call Mutation: registrarPagamento
+      const handlePayment = () => {
+          const method = prompt("Selecione o método (CREDIT_CARD, DEBIT_CARD, CASH, PIX):", "PIX") as any;
+          if (['CREDIT_CARD', 'DEBIT_CARD', 'CASH', 'PIX'].includes(method)) {
+              // Can also ask for notes via prompt if needed
+              const notes = prompt("Observações do pagamento (opcional):", "") || "";
+              registerPayment(selectedOS.id, {
+                  method: method,
+                  amount: selectedOS.totalCost,
+                  notes: notes
               });
+          } else {
+              alert("Método inválido.");
+          }
+      }
+
+      const sendPreventiveReminder = () => {
+          const notification = generateNotification(selectedOS, 'PREVENTIVE');
+          if (notification) {
+              const updated = { ...selectedOS, notifications: [notification, ...(selectedOS.notifications || [])] };
+              setOrders(prev => prev.map(o => o.id === selectedOS.id ? updated : o));
+              setSelectedOS(updated);
               alert("Lembrete Preventivo enviado com sucesso!");
           } else {
               alert("Cliente não autorizou notificações ou não há dados preventivos.");
@@ -1043,7 +1080,7 @@ export default function App() {
                   </button>
                   <div>
                       <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                          {os.id} <StatusBadge status={os.status} />
+                          {selectedOS.id} <StatusBadge status={selectedOS.status} />
                       </h2>
                   </div>
                   <div className="ml-auto flex gap-2">
@@ -1070,7 +1107,7 @@ export default function App() {
                     onClick={() => setActiveTab('MESSAGES')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'MESSAGES' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                   >
-                      Comunicação com Cliente <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-xs">{os.notifications?.length || 0}</span>
+                      Comunicação com Cliente <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-xs">{selectedOS.notifications?.length || 0}</span>
                   </button>
               </div>
 
@@ -1082,21 +1119,21 @@ export default function App() {
                             <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase">Cliente</label>
-                                    <div className="text-slate-800 font-medium text-lg">{os.customerName}</div>
-                                    <div className="text-slate-500">{os.phone}</div>
-                                    {os.customerCpf && <div className="text-xs text-slate-400 mt-1">CPF: {os.customerCpf}</div>}
+                                    <div className="text-slate-800 font-medium text-lg">{selectedOS.customerName}</div>
+                                    <div className="text-slate-500">{selectedOS.phone}</div>
+                                    {selectedOS.customerCpf && <div className="text-xs text-slate-400 mt-1">CPF: {selectedOS.customerCpf}</div>}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase">Veículo</label>
-                                    <div className="text-slate-800 font-medium text-lg">{os.vehicleModel}</div>
+                                    <div className="text-slate-800 font-medium text-lg">{selectedOS.vehicleModel}</div>
                                     <div className="flex gap-2">
-                                    <div className="text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded">{os.plate}</div>
-                                    {os.currentMileage && <div className="text-slate-500 bg-slate-100 inline-block px-1 rounded">{os.currentMileage} km</div>}
+                                    <div className="text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded">{selectedOS.plate}</div>
+                                    {selectedOS.currentMileage && <div className="text-slate-500 bg-slate-100 inline-block px-1 rounded">{selectedOS.currentMileage} km</div>}
                                     </div>
                                 </div>
                                 <div className="col-span-2 pt-4 border-t border-slate-100">
                                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reclamação do Cliente</label>
-                                    <p className="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">"{os.complaint}"</p>
+                                    <p className="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">"{selectedOS.complaint}"</p>
                                 </div>
                                 <div className="col-span-2">
                                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Notas do Mecânico (Técnico)</label>
@@ -1104,12 +1141,12 @@ export default function App() {
                                         <textarea 
                                             className="w-full p-3 border border-slate-300 rounded-lg"
                                             rows={4}
-                                            value={os.mechanicNotes || ''}
-                                            onChange={e => setOs({...os, mechanicNotes: e.target.value})}
+                                            value={selectedOS.mechanicNotes || ''}
+                                            onChange={e => setSelectedOS({...selectedOS, mechanicNotes: e.target.value})}
                                             placeholder="Descreva o serviço realizado, observações técnicas..."
                                         />
                                     ) : (
-                                        <p className="text-slate-700 whitespace-pre-wrap">{os.mechanicNotes || 'Nenhuma observação registrada.'}</p>
+                                        <p className="text-slate-700 whitespace-pre-wrap">{selectedOS.mechanicNotes || 'Nenhuma observação registrada.'}</p>
                                     )}
                                 </div>
                                 
@@ -1118,8 +1155,8 @@ export default function App() {
                                     {editMode ? (
                                         <select 
                                             className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                                            value={os.assignedMechanicId || ''}
-                                            onChange={e => setOs({...os, assignedMechanicId: e.target.value})}
+                                            value={selectedOS.assignedMechanicId || ''}
+                                            onChange={handleAssignMechanic}
                                         >
                                             <option value="">Selecione...</option>
                                             {MOCK_USERS.filter(u => u.role === 'MECHANIC').map(u => (
@@ -1128,12 +1165,12 @@ export default function App() {
                                         </select>
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            {os.assignedMechanicId ? (
+                                            {selectedOS.assignedMechanicId ? (
                                                 <>
                                                     <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold">
-                                                        {MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.avatar}
+                                                        {MOCK_USERS.find(u => u.id === selectedOS.assignedMechanicId)?.avatar}
                                                     </div>
-                                                    <span>{MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name}</span>
+                                                    <span>{MOCK_USERS.find(u => u.id === selectedOS.assignedMechanicId)?.name}</span>
                                                 </>
                                             ) : <span className="text-slate-400 italic">Não atribuído</span>}
                                         </div>
@@ -1142,13 +1179,13 @@ export default function App() {
                             </div>
                         </Card>
 
-                        {os.aiDiagnosis && (
+                        {selectedOS.aiDiagnosis && (
                             <Card title="Inteligência Preditiva (IA)" className="border-l-4 border-l-purple-500">
                                 <div className="flex gap-4 items-start">
                                     <div className="bg-purple-100 p-2 rounded-full text-purple-600 mt-1"><ShieldCheck size={20}/></div>
                                     <div>
                                         <h4 className="font-bold text-slate-800 mb-1">Recomendação de Manutenção Preventiva (UC006)</h4>
-                                        <p className="text-slate-600 text-sm leading-relaxed">{os.aiDiagnosis.preventiveMaintenance}</p>
+                                        <p className="text-slate-600 text-sm leading-relaxed">{selectedOS.aiDiagnosis.preventiveMaintenance}</p>
                                     </div>
                                 </div>
                             </Card>
@@ -1166,7 +1203,7 @@ export default function App() {
                                             key={s} 
                                             disabled={!editMode}
                                             onClick={() => changeStatus(s)}
-                                            className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${os.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
+                                            className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${selectedOS.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
                                         >
                                             {s}
                                         </button>
@@ -1180,36 +1217,37 @@ export default function App() {
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 text-sm">Mão de Obra</span>
                                     {editMode && isAdmin ? (
-                                        <input type="number" className="w-24 p-1 text-right border rounded" value={os.laborCost} onChange={e => setOs({...os, laborCost: Number(e.target.value)})} />
+                                        <input type="number" className="w-24 p-1 text-right border rounded" value={selectedOS.laborCost} onChange={e => setSelectedOS({...selectedOS, laborCost: Number(e.target.value)})} />
                                     ) : (
-                                        <span className="font-mono">R$ {os.laborCost.toFixed(2)}</span>
+                                        <span className="font-mono">R$ {selectedOS.laborCost.toFixed(2)}</span>
                                     )}
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 text-sm">Peças</span>
                                     {editMode && isAdmin ? (
-                                        <input type="number" className="w-24 p-1 text-right border rounded" value={os.partsCost} onChange={e => setOs({...os, partsCost: Number(e.target.value)})} />
+                                        <input type="number" className="w-24 p-1 text-right border rounded" value={selectedOS.partsCost} onChange={e => setSelectedOS({...selectedOS, partsCost: Number(e.target.value)})} />
                                     ) : (
-                                        <span className="font-mono">R$ {os.partsCost.toFixed(2)}</span>
+                                        <span className="font-mono">R$ {selectedOS.partsCost.toFixed(2)}</span>
                                     )}
                                 </div>
                                 <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
                                     <span className="font-bold text-slate-800">TOTAL</span>
-                                    <span className="font-bold text-xl text-green-600">R$ {(os.laborCost + os.partsCost).toFixed(2)}</span>
+                                    <span className="font-bold text-xl text-green-600">R$ {(selectedOS.laborCost + selectedOS.partsCost).toFixed(2)}</span>
                                 </div>
 
                                 {/* Payment Section - Admin Only */}
                                 {isAdmin && (
                                     <div className="pt-4 mt-4 border-t border-slate-100 bg-slate-50 -mx-6 px-6 -mb-6 pb-6">
-                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><CreditCard size={14}/> Pagamento</h4>
-                                        {os.status === OSStatus.PAID ? (
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><Wallet size={14}/> Pagamento</h4>
+                                        {selectedOS.status === OSStatus.PAID ? (
                                             <div className="bg-green-100 text-green-800 p-3 rounded-lg text-center text-sm font-medium border border-green-200">
-                                                Pagamento Confirmado
+                                                <p>Pagamento Confirmado</p>
+                                                {selectedOS.paymentMethod && <p className="text-xs opacity-75 mt-1">Via {selectedOS.paymentMethod}</p>}
                                             </div>
                                         ) : (
                                             <button 
                                                 disabled={!editMode}
-                                                onClick={() => changeStatus(OSStatus.PAID)}
+                                                onClick={handlePayment}
                                                 className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
                                             >
                                                 Registrar Pagamento
@@ -1225,14 +1263,14 @@ export default function App() {
                 <div className="animate-fade-in grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px]">
                     {/* Message List */}
                     <Card title="Histórico de Notificações (UC 4.2)" className="md:col-span-2 h-full flex flex-col relative">
-                        {(!os.notifications || os.notifications.length === 0) ? (
+                        {(!selectedOS.notifications || selectedOS.notifications.length === 0) ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                                 <MessageCircle size={48} className="mb-2 opacity-20" />
                                 <p>Nenhuma notificação enviada para este cliente.</p>
                             </div>
                         ) : (
                             <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                                {os.notifications.map(n => (
+                                {selectedOS.notifications.map(n => (
                                     <div key={n.id} className="flex gap-4 p-4 border border-slate-100 rounded-xl bg-slate-50 relative group">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                                             n.channel === 'WHATSAPP' ? 'bg-green-100 text-green-600' : 
@@ -1255,7 +1293,7 @@ export default function App() {
                                             <div className="flex gap-2">
                                                 {n.channel === 'WHATSAPP' && (
                                                     <button 
-                                                        onClick={() => openWhatsApp(os.phone, n.message)}
+                                                        onClick={() => openWhatsApp(selectedOS.phone, n.message)}
                                                         className="text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
                                                     >
                                                         <ExternalLink size={12} /> Enviar WhatsApp
@@ -1291,14 +1329,14 @@ export default function App() {
                     <div className="space-y-6">
                         <Card title="Ações de Comunicação">
                              <div className="space-y-4">
-                                 <div className={`p-3 rounded-lg border text-sm ${os.acceptsNotifications ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-                                     <strong>Status LGPD:</strong> {os.acceptsNotifications ? 'Cliente Autorizou Notificações' : 'Cliente NÃO Autorizou Notificações'}
+                                 <div className={`p-3 rounded-lg border text-sm ${selectedOS.acceptsNotifications ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                     <strong>Status LGPD:</strong> {selectedOS.acceptsNotifications ? 'Cliente Autorizou Notificações' : 'Cliente NÃO Autorizou Notificações'}
                                  </div>
                                  
-                                 {os.aiDiagnosis && (
+                                 {selectedOS.aiDiagnosis && (
                                      <button 
                                         onClick={sendPreventiveReminder}
-                                        disabled={!os.acceptsNotifications}
+                                        disabled={!selectedOS.acceptsNotifications}
                                         className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-purple-200"
                                      >
                                          <Bell size={16}/> Enviar Lembrete Preventivo (IA)
@@ -1316,8 +1354,8 @@ export default function App() {
                                  <textarea className="w-full p-3 border border-slate-300 rounded-lg text-sm h-24" placeholder="Digite a mensagem..."></textarea>
                                  <div className="flex gap-2">
                                      <button 
-                                        disabled={!os.acceptsNotifications} 
-                                        onClick={() => openWhatsApp(os.phone, "Olá, mensagem manual da oficina.")}
+                                        disabled={!selectedOS.acceptsNotifications} 
+                                        onClick={() => openWhatsApp(selectedOS.phone, "Olá, mensagem manual da oficina.")}
                                         className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
                                      >
                                          <MessageCircle size={16}/> WhatsApp
@@ -1336,61 +1374,148 @@ export default function App() {
   }
 
   const ChatView = () => {
-      const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([
-          {role: 'model', text: 'Olá! Sou o especialista técnico da OSMech. Posso ajudar com diagnósticos, consultar códigos de erro ou sugerir preços de peças.'}
-      ]);
-      const [input, setInput] = useState('');
-      const [loading, setLoading] = useState(false);
+    const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([
+        { role: 'model', text: 'Olá! Sou o assistente virtual da OSMech. Como posso ajudar com dúvidas técnicas ou de gestão hoje?' }
+    ]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
-      const send = async () => {
-          if(!input.trim()) return;
-          const userMsg = input;
-          setInput('');
-          setMessages(prev => [...prev, {role: 'user', text: userMsg}]);
-          setLoading(true);
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
 
-          const response = await getShopAssistantChat(messages, userMsg);
-          
-          setMessages(prev => [...prev, {role: 'model', text: response}]);
-          setLoading(false);
-      };
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        
+        const userMsg = input;
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+        setLoading(true);
+
+        const response = await getShopAssistantChat(messages, userMsg);
+        
+        setMessages(prev => [...prev, { role: 'model', text: response }]);
+        setLoading(false);
+    };
+
+    return (
+        <Card className="h-[calc(100vh-200px)] min-h-[500px] flex flex-col p-0 overflow-hidden relative">
+            <div className="bg-slate-900 text-white p-4 flex items-center gap-3">
+                 <div className="bg-blue-500 p-2 rounded-full">
+                     <Bot size={24} />
+                 </div>
+                 <div>
+                     <h3 className="font-bold">Assistente Técnico IA</h3>
+                     <p className="text-xs text-slate-400">Tire dúvidas sobre mecânica, normas e gestão.</p>
+                 </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                {messages.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                            m.role === 'user' 
+                            ? 'bg-blue-600 text-white rounded-br-none' 
+                            : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none shadow-sm'
+                        }`}>
+                            <ReactMarkdown>{m.text}</ReactMarkdown>
+                        </div>
+                    </div>
+                ))}
+                {loading && (
+                    <div className="flex justify-start">
+                         <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none shadow-sm flex gap-2 items-center text-slate-400 text-sm">
+                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></div>
+                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></div>
+                         </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            <div className="p-4 bg-white border-t border-slate-200">
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        className="flex-1 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        placeholder="Digite sua dúvida..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                        disabled={loading}
+                    />
+                    <button 
+                        onClick={handleSend} 
+                        disabled={loading || !input.trim()}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white p-2.5 rounded-lg transition-colors"
+                    >
+                        <Send size={20} />
+                    </button>
+                </div>
+            </div>
+        </Card>
+    );
+  };
+
+  const ReportsView = () => {
+      if (!isAdmin) return <div className="p-4 text-red-500 bg-red-50 rounded-lg border border-red-200">Acesso negado. Apenas administradores podem ver esta tela.</div>;
 
       return (
-          <div className="h-[calc(100vh-10rem)] flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden animate-fade-in shadow-sm">
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
-                  {messages.map((m, i) => (
-                      <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'}`}>
-                              {m.role === 'model' ? <ReactMarkdown>{m.text}</ReactMarkdown> : m.text}
-                          </div>
-                      </div>
-                  ))}
-                  {loading && (
-                      <div className="flex justify-start">
-                          <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-bl-none flex items-center gap-2">
-                              <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                              <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
-                              <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
-                          </div>
-                      </div>
-                  )}
+          <div className="space-y-6 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard title="Receita Total" value={`R$ ${stats.monthlyRevenue.toFixed(2)}`} icon={<DollarSign size={24}/>} color="bg-emerald-500"/>
+                  <StatCard title="OS Finalizadas" value={stats.completed} icon={<CheckCircle size={24}/>} color="bg-blue-500"/>
+                  <StatCard title="Taxa Conversão" value={`${stats.conversionRate.toFixed(1)}%`} icon={<Activity size={24}/>} color="bg-purple-500"/>
+                  <StatCard title="Logs do Sistema" value={logs.length} icon={<ShieldCheck size={24}/>} color="bg-slate-500"/>
               </div>
-              <div className="p-4 bg-white border-t border-slate-100 flex gap-2">
-                  <input 
-                      type="text" 
-                      className="flex-1 border border-slate-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                      placeholder="Digite sua dúvida técnica..."
-                      value={input}
-                      onChange={e => setInput(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && send()}
-                  />
-                  <button onClick={send} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-lg transition-colors disabled:opacity-50">
-                      <ArrowRight />
-                  </button>
-              </div>
+
+              <Card title="Auditoria de Sistema (Logs)">
+                  <div className="overflow-x-auto max-h-[600px]">
+                      <table className="w-full text-left text-sm relative">
+                          <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm">
+                              <tr className="border-b border-slate-100 text-slate-500 uppercase text-xs">
+                                  <th className="p-3">Data/Hora</th>
+                                  <th className="p-3">Usuário</th>
+                                  <th className="p-3">Ação</th>
+                                  <th className="p-3">Detalhes</th>
+                                  <th className="p-3">ID Alvo</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                              {logs.map(log => (
+                                  <tr key={log.id} className="hover:bg-slate-50">
+                                      <td className="p-3 font-mono text-xs text-slate-500">
+                                          {new Date(log.timestamp).toLocaleString()}
+                                      </td>
+                                      <td className="p-3 font-medium text-slate-700">{log.userName}</td>
+                                      <td className="p-3">
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                                              log.action === 'CREATE' ? 'bg-green-50 text-green-600 border-green-100' :
+                                              log.action === 'UPDATE' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                              log.action === 'DELETE' ? 'bg-red-50 text-red-600 border-red-100' :
+                                              log.action === 'FINANCE' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
+                                              'bg-slate-100 text-slate-600 border-slate-200'
+                                          }`}>
+                                              {log.action}
+                                          </span>
+                                      </td>
+                                      <td className="p-3 text-slate-600">{log.details}</td>
+                                      <td className="p-3 font-mono text-xs text-slate-400">{log.targetId || '-'}</td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              </Card>
           </div>
-      )
-  }
+      );
+  };
 
   // --- Main Render ---
 

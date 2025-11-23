@@ -34,10 +34,33 @@ export interface CustomerNotification {
   read: boolean;
 }
 
+// --- Mutation Inputs ---
+
+export interface CreateOSInput {
+  customerName: string;
+  customerCpf?: string;
+  phone: string;
+  vehicleModel: string;
+  plate: string;
+  currentMileage?: number;
+  complaint: string;
+  acceptsNotifications: boolean;
+  aiDiagnosis?: AIDiagnosisResult;
+  initialStatus?: OSStatus;
+  estimatedLaborCost?: number;
+  estimatedPartsCost?: number;
+}
+
+export interface PaymentInput {
+  method: 'CREDIT_CARD' | 'DEBIT_CARD' | 'CASH' | 'PIX';
+  amount: number;
+  notes?: string;
+}
+
 export interface ServiceOrder {
   id: string;
   customerName: string;
-  customerCpf?: string; // Added for Advanced Search (Identification)
+  customerCpf?: string;
   vehicleModel: string;
   plate: string;
   currentMileage?: number;
@@ -56,6 +79,7 @@ export interface ServiceOrder {
   laborCost: number;
   totalCost: number;
   paymentMethod?: 'CREDIT_CARD' | 'DEBIT_CARD' | 'CASH' | 'PIX';
+  paymentDate?: string;
   
   status: OSStatus;
   
@@ -69,7 +93,7 @@ export interface ServiceOrder {
 
 export interface AuditLogEntry {
   id: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN';
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'FINANCE';
   targetId?: string;
   userId: string;
   userName: string;

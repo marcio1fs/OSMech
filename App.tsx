@@ -32,7 +32,9 @@ import {
   Mail,
   Smartphone,
   Send,
-  Bell
+  Bell,
+  ExternalLink,
+  Copy
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -57,7 +59,7 @@ const INITIAL_DATA: ServiceOrder[] = [
     vehicleModel: 'Fiat Ducato 2.3 2019',
     plate: 'ABC-1234',
     currentMileage: 125000,
-    phone: '(11) 99999-9999',
+    phone: '11999999999',
     complaint: 'Motor perdendo potência em subidas.',
     status: OSStatus.PAID,
     assignedMechanicId: 'u2',
@@ -86,7 +88,7 @@ const INITIAL_DATA: ServiceOrder[] = [
     vehicleModel: 'Hyundai HB20 1.0',
     plate: 'XYZ-9876',
     currentMileage: 45000,
-    phone: '(11) 98888-8888',
+    phone: '11988888888',
     complaint: 'Barulho na suspensão dianteira.',
     status: OSStatus.PENDING,
     assignedMechanicId: 'u3',
@@ -152,65 +154,72 @@ export default function App() {
       const timestamp = new Date().toISOString();
       const mechanicName = os.assignedMechanicId ? MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name.split(' ')[0] : 'nossa equipe';
 
+      // Templates UC 4.2
       let notif: Partial<CustomerNotification> = { id, sentAt: timestamp, read: false };
 
       if (type === 'CREATED') {
           notif = {
               channel: 'WHATSAPP',
               title: 'Abertura da OS',
-              message: `Sua OS #${os.id} foi aberta! O problema relatado foi: "${os.complaint}". Você será notificado sobre o orçamento.`
+              message: `Olá ${os.customerName}! Sua OS #${os.id} foi aberta na OSMech. Problema: "${os.complaint}". Te avisaremos assim que o orçamento estiver pronto.`
           };
       } else if (type === OSStatus.APPROVAL) {
           notif = {
               channel: 'WHATSAPP',
               title: 'Orçamento Pronto',
-              message: `Seu orçamento para OS #${os.id} está pronto. O valor total é de R$ ${os.totalCost.toFixed(2)}. Clique aqui para aprovar/rejeitar: https://osmech.app/ap/${os.id}`
-          };
-      } else if (type === OSStatus.IN_PROGRESS) {
-          // Estimate: Current time + labor hours (mock) + 2 hours buffer
-          const laborHours = os.aiDiagnosis?.estimatedLaborHours || 2;
-          const deliveryTime = new Date(Date.now() + (laborHours + 2) * 3600000);
-          
-          notif = {
-              channel: 'WHATSAPP',
-              title: 'Início do Serviço',
-              message: `A manutenção do seu veículo (OS #${os.id}) foi iniciada pelo mecânico ${mechanicName}. Previsão de entrega: ${deliveryTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`
+              message: `Olá! O orçamento da OS #${os.id} está pronto. Valor Total: R$ ${os.totalCost.toFixed(2)}. Responda para aprovar ou clique no link: https://osmech.app/ap/${os.id}`
           };
       } else if (type === OSStatus.COMPLETED) {
           notif = {
               channel: 'WHATSAPP',
               title: 'Serviço Concluído',
-              message: `Ótima notícia! O serviço da OS #${os.id} foi concluído com sucesso. O veículo está pronto para retirada e pagamento.`
+              message: `Ótima notícia, ${os.customerName}! O serviço da OS #${os.id} foi concluído. Seu veículo está pronto para retirada.`
+          };
+      } else if (type === OSStatus.IN_PROGRESS) {
+          const laborHours = os.aiDiagnosis?.estimatedLaborHours || 2;
+          const deliveryTime = new Date(Date.now() + (laborHours + 2) * 3600000);
+          notif = {
+              channel: 'WHATSAPP',
+              title: 'Início do Serviço',
+              message: `Iniciamos a manutenção (OS #${os.id}) com o mecânico ${mechanicName}. Previsão de entrega: ${deliveryTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`
           };
       } else if (type === OSStatus.PAID) {
           notif = {
               channel: 'EMAIL',
               title: 'Emissão de Recibo/NF',
-              message: `Obrigado por escolher a OSMech! Sua Nota Fiscal/Recibo da OS #${os.id} foi enviada para o seu e-mail.`
+              message: `Obrigado por escolher a OSMech! Sua Nota Fiscal/Recibo da OS #${os.id} segue em anexo.`
           };
       } else if (type === OSStatus.WAITING_PARTS) {
-           const partName = os.aiDiagnosis?.recommendedParts[0]?.name || "peças de reposição";
-           const resumeDate = new Date(Date.now() + 172800000); // +2 days
-
+           const partName = os.aiDiagnosis?.recommendedParts[0]?.name || "peças";
           notif = {
               channel: 'WHATSAPP',
               title: 'Aguardando Peças',
-              message: `Atenção: A manutenção da OS #${os.id} está pausada, pois estamos aguardando a chegada da peça [${partName}]. Previsão de retomada: ${resumeDate.toLocaleDateString()}.`
+              message: `Aviso OS #${os.id}: Estamos aguardando a chegada da peça [${partName}]. Avisaremos sobre a retomada.`
           };
       } else if (type === 'PREVENTIVE') {
-          // Extracts main keyword from preventive maintenance suggestion or uses generic
           const item = os.aiDiagnosis?.preventiveMaintenance || "manutenção preventiva";
           notif = {
               channel: 'WHATSAPP',
               title: 'Lembrete de Manutenção (IA)',
-              message: `Lembrete: A OSMech recomenda a "${item}" do seu veículo ${os.vehicleModel} nos próximos 30 dias, conforme a KM. Agende aqui: https://osmech.app/agendar`
+              message: `Lembrete OSMech: Baseado na KM do seu veículo, recomendamos realizar: "${item}". Vamos agendar?`
           };
       } else {
-          return null; // No notification for other statuses
+          return null;
       }
 
       return { ...notif, title: notif.title || 'Notificação', message: notif.message || '', channel: notif.channel || 'SMS' } as CustomerNotification;
   };
+
+  const openWhatsApp = (phone: string, text: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const encodedText = encodeURIComponent(text);
+    window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+  };
+
+  const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text);
+      alert("Texto copiado para a área de transferência! (Use para SMS)");
+  }
 
   // --- Navigation Items ---
   const navItems = useMemo(() => {
@@ -228,21 +237,39 @@ export default function App() {
 
   // --- Statistics Calculation ---
   const stats = useMemo(() => {
-    const totalRevenue = orders
-      .filter(o => o.status === OSStatus.COMPLETED || o.status === OSStatus.PAID)
+    // UC 4.1: Faturamento Mensal (Monthly Revenue)
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    const monthlyRevenue = orders
+      .filter(o => {
+          const d = new Date(o.updatedAt);
+          return (o.status === OSStatus.COMPLETED || o.status === OSStatus.PAID) && 
+                 d.getMonth() === currentMonth && 
+                 d.getFullYear() === currentYear;
+      })
       .reduce((acc, curr) => acc + curr.totalCost, 0);
     
     const active = orders.filter(o => o.status !== OSStatus.COMPLETED && o.status !== OSStatus.PAID).length;
-    const pending = orders.filter(o => o.status === OSStatus.APPROVAL).length;
     
-    // Only count truly paid/finished for a specific "Completed" metric
     const completed = orders.filter(o => o.status === OSStatus.PAID || o.status === OSStatus.COMPLETED).length;
 
-    // Conversion Rate: (Approved + In Progress + Completed + Paid) / Total
     const converted = orders.filter(o => o.status !== OSStatus.PENDING && o.status !== OSStatus.DIAGNOSING).length;
     const conversionRate = orders.length > 0 ? (converted / orders.length) * 100 : 0;
 
-    return { totalRevenue, active, pending, completed, conversionRate };
+    return { monthlyRevenue, active, completed, conversionRate };
+  }, [orders]);
+
+  // UC 4.1: OSs Abertas vs Fechadas
+  const chartOpenVsClosed = useMemo(() => {
+      const openCount = orders.filter(o => ![OSStatus.COMPLETED, OSStatus.PAID, 'Cancelada'].includes(o.status)).length;
+      const closedCount = orders.filter(o => [OSStatus.COMPLETED, OSStatus.PAID].includes(o.status)).length;
+      const total = openCount + closedCount;
+
+      return [
+          { name: 'Abertas', value: openCount, percent: total > 0 ? (openCount/total*100).toFixed(0) : 0 },
+          { name: 'Fechadas', value: closedCount, percent: total > 0 ? (closedCount/total*100).toFixed(0) : 0 }
+      ];
   }, [orders]);
 
   const chartDataStatus = useMemo(() => {
@@ -321,7 +348,12 @@ export default function App() {
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {isAdmin && (
-            <StatCard title="Receita (Finalizada)" value={`R$ ${stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<DollarSign size={24} />} color="bg-emerald-500" />
+            <StatCard 
+                title="Faturamento (Mês Atual)" 
+                value={`R$ ${stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+                icon={<DollarSign size={24} />} 
+                color="bg-emerald-500" 
+            />
         )}
         <StatCard title="OS em Andamento" value={stats.active} icon={<Wrench size={24} />} color="bg-blue-500" />
         <StatCard title="Taxa de Conversão" value={`${stats.conversionRate.toFixed(0)}%`} icon={<Activity size={24} />} color="bg-purple-500" />
@@ -329,7 +361,32 @@ export default function App() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Volume de OS por Status">
+        {/* UC 4.1: OSs Abertas vs Fechadas */}
+        <Card title="Status Geral (Abertas vs Fechadas)">
+            <div className="h-64 w-full flex justify-center relative">
+                <ResponsiveContainer width="100%" height="100%">
+                    <RePieChart>
+                        <Pie
+                            data={chartOpenVsClosed}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                            label={({name, percent}) => `${name} ${percent}%`}
+                        >
+                            <Cell key="cell-0" fill="#3b82f6" /> {/* Abertas - Blue */}
+                            <Cell key="cell-1" fill="#64748b" /> {/* Fechadas - Slate */}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </RePieChart>
+                </ResponsiveContainer>
+            </div>
+        </Card>
+
+        <Card title="Volume de OS por Status Detalhado">
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartDataStatus}>
@@ -345,20 +402,6 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </Card>
-
-        <Card title="Produtividade por Mecânico">
-            <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartMechanicPerformance} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
-                <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
-            </div>
         </Card>
       </div>
     </div>
@@ -1148,7 +1191,7 @@ export default function App() {
               ) : (
                 <div className="animate-fade-in grid grid-cols-1 md:grid-cols-3 gap-6 h-[500px]">
                     {/* Message List */}
-                    <Card title="Histórico de Notificações" className="md:col-span-2 h-full flex flex-col relative">
+                    <Card title="Histórico de Notificações (UC 4.2)" className="md:col-span-2 h-full flex flex-col relative">
                         {(!os.notifications || os.notifications.length === 0) ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                                 <MessageCircle size={48} className="mb-2 opacity-20" />
@@ -1166,10 +1209,34 @@ export default function App() {
                                         </div>
                                         <div className="flex-1">
                                             <div className="flex justify-between items-start mb-1">
-                                                <h4 className="font-bold text-slate-800 text-sm">{n.title}</h4>
+                                                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                                    {n.title}
+                                                    {['Abertura da OS', 'Orçamento Pronto', 'Serviço Concluído'].includes(n.title) && (
+                                                        <span className="bg-yellow-100 text-yellow-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">Importante</span>
+                                                    )}
+                                                </h4>
                                                 <span className="text-[10px] text-slate-400">{new Date(n.sentAt).toLocaleDateString()} {new Date(n.sentAt).toLocaleTimeString().slice(0,5)}</span>
                                             </div>
-                                            <p className="text-sm text-slate-600 leading-relaxed">{n.message}</p>
+                                            <p className="text-sm text-slate-600 leading-relaxed mb-2">{n.message}</p>
+                                            
+                                            <div className="flex gap-2">
+                                                {n.channel === 'WHATSAPP' && (
+                                                    <button 
+                                                        onClick={() => openWhatsApp(os.phone, n.message)}
+                                                        className="text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
+                                                    >
+                                                        <ExternalLink size={12} /> Enviar WhatsApp
+                                                    </button>
+                                                )}
+                                                <button 
+                                                    onClick={() => copyToClipboard(n.message)}
+                                                    className="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1.5 rounded flex items-center gap-1 transition-colors"
+                                                    title="Copiar texto para SMS ou outro app"
+                                                >
+                                                    <Copy size={12} /> Copiar Texto
+                                                </button>
+                                            </div>
+
                                             <div className="mt-2 flex gap-2">
                                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                                                      {n.channel}
@@ -1183,7 +1250,7 @@ export default function App() {
                         )}
                         <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 flex items-center gap-2">
                             <Bot size={16} />
-                            As notificações são enviadas automaticamente com base na mudança de status.
+                            Notificações de Abertura, Orçamento e Conclusão são geradas automaticamente.
                         </div>
                     </Card>
 
@@ -1211,11 +1278,15 @@ export default function App() {
                              </div>
                         </Card>
 
-                        <Card title="Envio Manual (Simulado)">
+                        <Card title="Envio Manual">
                              <div className="space-y-3">
                                  <textarea className="w-full p-3 border border-slate-300 rounded-lg text-sm h-24" placeholder="Digite a mensagem..."></textarea>
                                  <div className="flex gap-2">
-                                     <button disabled={!os.acceptsNotifications} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                                     <button 
+                                        disabled={!os.acceptsNotifications} 
+                                        onClick={() => openWhatsApp(os.phone, "Olá, mensagem manual da oficina.")}
+                                        className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+                                     >
                                          <MessageCircle size={16}/> WhatsApp
                                      </button>
                                      <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">

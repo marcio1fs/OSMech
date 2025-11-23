@@ -1,0 +1,5 @@
+{
+  "name": "OSMech - Gestão Inteligente de Oficinas",
+  "description": "Sistema de gerenciamento de Ordens de Serviço para oficinas mecânicas com assistente de diagnóstico via IA.",
+  "requestFramePermissions": []
+}

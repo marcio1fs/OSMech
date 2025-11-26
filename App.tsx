@@ -205,119 +205,196 @@ const ReceiptModal = ({ order, isOpen, onClose }: { order: ServiceOrder, isOpen:
   const handleShareWhatsApp = () => {
       const cleanPhone = order.phone.replace(/\D/g, '');
       
-      // Construir a lista de itens para o texto
       const itemsList = order.items && order.items.length > 0
           ? order.items.map(i => `• ${i.quantity}x ${i.description} (R$ ${i.totalPrice.toFixed(2)})`).join('%0A')
           : `• Mão de Obra (R$ ${order.laborCost.toFixed(2)})%0A• Peças (R$ ${order.partsCost.toFixed(2)})`;
 
-      // Construir a mensagem formatada
       const text = 
-          `*🧾 RECIBO - OSMECH*%0A` +
+          `*🧾 EXTRATO DE SERVIÇOS - OSMECH*%0A` +
           `----------------------------------%0A` +
           `*OS:* #${order.id}%0A` +
           `*Cliente:* ${order.customerName}%0A` +
-          `*Veículo:* ${order.vehicleModel} (${order.plate})%0A` +
+          `*Veículo:* ${order.vehicleModel}%0A` +
           `----------------------------------%0A` +
-          `*SERVIÇOS:*%0A` +
+          `*DETALHAMENTO:*%0A` +
           `${itemsList}%0A%0A` +
           `*💰 TOTAL: R$ ${order.totalCost.toFixed(2)}*%0A` +
           `----------------------------------%0A` +
           `*Pgto:* ✅ ${order.paymentMethod}%0A` +
-          `*Data:* ${new Date().toLocaleDateString()}%0A%0A` +
-          `_Obrigado pela preferência!_`;
+          `_Documento completo disponível para impressão._`;
 
       window.open(`https://wa.me/55${cleanPhone}?text=${text}`, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in z-[100]">
+    <div className="fixed inset-0 bg-slate-800/80 z-50 flex items-center justify-center p-4 animate-fade-in z-[100] overflow-y-auto">
       <style>
         {`
           @media print {
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; background: white; }
+            #print-area {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 210mm;
+              min-height: 297mm;
+              margin: 0;
+              padding: 15mm;
+              background: white;
+              color: black;
+              border: none;
+              box-shadow: none;
+            }
             .no-print { display: none !important; }
+            @page { size: A4; margin: 0; }
           }
         `}
       </style>
 
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 no-print">
-           <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><FileText size={18}/> Recibo de Serviço</h3>
-           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-        </div>
+      <div className="flex flex-col items-center max-h-full w-full">
+          {/* Botões de Ação Flutuantes */}
+          <div className="bg-white p-3 rounded-xl shadow-lg mb-4 flex gap-4 no-print w-full max-w-2xl justify-between items-center">
+               <h3 className="font-bold text-slate-700 ml-2">Visualizar Recibo</h3>
+               <div className="flex gap-2">
+                    <button 
+                        onClick={handleShareWhatsApp} 
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
+                    >
+                        <Share2 size={16}/> Enviar WhatsApp
+                    </button>
+                    <button 
+                        onClick={() => window.print()} 
+                        className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
+                    >
+                        <Printer size={16}/> Imprimir / Salvar PDF
+                    </button>
+                    <button onClick={onClose} className="text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-slate-100">
+                        <X size={20}/>
+                    </button>
+               </div>
+          </div>
         
-        {/* Área de Impressão */}
-        <div id="print-area" className="p-8 space-y-6 bg-white overflow-y-auto">
-            <div className="text-center border-b-2 border-dashed border-slate-200 pb-6">
-                <div className="flex justify-center mb-2">
-                     <div className="bg-slate-900 p-2 rounded text-white"><Wrench size={24}/></div>
+        {/* Área de Impressão - Formato A4 */}
+        <div id="print-area" className="bg-white shadow-2xl w-[210mm] min-h-[297mm] p-[15mm] text-slate-800 relative flex flex-col">
+            
+            {/* Cabeçalho */}
+            <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
+                <div className="flex gap-4 items-center">
+                    <div className="bg-slate-900 text-white p-3 rounded-lg">
+                        <Wrench size={32}/>
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight uppercase">OSMech</h1>
+                        <p className="text-xs text-slate-500 uppercase tracking-wider">Centro Automotivo Especializado</p>
+                        <p className="text-xs text-slate-500 mt-1">CNPJ: 00.000.000/0001-00</p>
+                        <p className="text-xs text-slate-500">Rua da Mecânica, 123 - Centro, SP</p>
+                    </div>
                 </div>
-                <h2 className="font-bold text-xl uppercase tracking-widest text-slate-800">OSMech</h2>
-                <p className="text-xs text-slate-500 uppercase tracking-wide">Gestão de Oficinas Especializadas</p>
-                <p className="text-xs text-slate-400 mt-1">{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
-            </div>
-            
-             <div className="text-sm space-y-1 text-slate-600">
-                <p><strong className="text-slate-800">OS:</strong> #{order.id}</p>
-                <p><strong className="text-slate-800">Cliente:</strong> {order.customerName}</p>
-                <p><strong className="text-slate-800">CPF:</strong> {order.customerCpf || 'N/A'}</p>
-                <p><strong className="text-slate-800">Veículo:</strong> {order.vehicleModel} <span className="text-xs bg-slate-100 px-1 rounded border">{order.plate}</span></p>
+                <div className="text-right">
+                    <h2 className="text-xl font-bold text-slate-800">RECIBO / FATURA</h2>
+                    <p className="text-sm font-mono text-slate-500 mt-1">#{order.id}</p>
+                    <p className="text-xs text-slate-400 mt-1">Emissão: {new Date().toLocaleDateString()}</p>
+                </div>
             </div>
 
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="text-xs text-slate-400 border-b border-slate-100 text-left">
-                        <th className="py-2 font-normal uppercase">Qtd</th>
-                        <th className="py-2 font-normal uppercase">Descrição</th>
-                        <th className="py-2 font-normal uppercase text-right">Total</th>
-                    </tr>
-                </thead>
-                <tbody className="text-slate-700">
-                    {order.items && order.items.length > 0 ? (
-                        order.items.map(item => (
-                            <tr key={item.id} className="border-b border-slate-50 last:border-0">
-                                <td className="py-2">{item.quantity}</td>
-                                <td className="py-2">
-                                    {item.description}
-                                    <span className="text-[10px] ml-2 text-slate-400 border border-slate-200 px-1 rounded uppercase">{item.type === 'PART' ? 'Peça' : 'Serv'}</span>
-                                </td>
-                                <td className="text-right font-mono">R$ {item.totalPrice.toFixed(2)}</td>
-                            </tr>
-                        ))
-                    ) : (
-                        <>
-                            <tr><td className="py-2">1</td><td className="py-2">Mão de Obra (Geral)</td><td className="text-right font-mono">R$ {order.laborCost.toFixed(2)}</td></tr>
-                            <tr><td className="py-2">1</td><td className="py-2">Peças (Geral)</td><td className="text-right font-mono">R$ {order.partsCost.toFixed(2)}</td></tr>
-                        </>
-                    )}
-                    <tr className="font-bold border-t-2 border-slate-800 text-lg"><td colSpan={2} className="py-3">TOTAL</td><td className="text-right py-3">R$ {order.totalCost.toFixed(2)}</td></tr>
-                </tbody>
-            </table>
-
-            <div className="bg-green-50 p-4 rounded-lg text-center border border-green-100">
-                <p className="font-bold text-green-800 text-sm mb-1 flex items-center justify-center gap-1"><CheckCircle size={14}/> PAGAMENTO CONFIRMADO</p>
-                <p className="text-xs text-green-700">Via {order.paymentMethod} em {order.paymentDate ? new Date(order.paymentDate).toLocaleDateString() : '-'}</p>
+            {/* Dados Cliente e Veículo */}
+            <div className="grid grid-cols-2 gap-8 mb-8">
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Dados do Cliente</h3>
+                    <p className="font-bold text-sm">{order.customerName}</p>
+                    <p className="text-xs text-slate-600 mt-1">CPF: {order.customerCpf || 'Não informado'}</p>
+                    <p className="text-xs text-slate-600">Tel: {order.phone}</p>
+                </div>
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Dados do Veículo</h3>
+                    <p className="font-bold text-sm">{order.vehicleModel}</p>
+                    <p className="text-xs text-slate-600 mt-1">Placa: <span className="font-mono bg-white border border-slate-300 px-1 rounded">{order.plate}</span></p>
+                    <p className="text-xs text-slate-600">KM: {order.currentMileage || 'N/A'}</p>
+                </div>
             </div>
-            
-            <p className="text-[10px] text-center text-slate-400 pt-4">Obrigado pela preferência!</p>
-        </div>
 
-        {/* Botões de Ação */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3 no-print">
-             <button 
-                onClick={handleShareWhatsApp} 
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors shadow-sm"
-             >
-                <Share2 size={18}/> WhatsApp
-            </button>
-             <button 
-                onClick={() => window.print()} 
-                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors shadow-sm"
-             >
-                <Printer size={18}/> Imprimir
-            </button>
+            {/* Tabela de Itens */}
+            <div className="flex-1">
+                <h3 className="text-sm font-bold text-slate-800 uppercase mb-2 border-l-4 border-slate-800 pl-2">Detalhamento dos Serviços</h3>
+                <table className="w-full text-sm mb-8">
+                    <thead>
+                        <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 text-xs uppercase">
+                            <th className="py-3 px-2 text-left">Descrição</th>
+                            <th className="py-3 px-2 text-center w-24">Tipo</th>
+                            <th className="py-3 px-2 text-center w-16">Qtd</th>
+                            <th className="py-3 px-2 text-right w-28">Unitário</th>
+                            <th className="py-3 px-2 text-right w-28">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody className="text-slate-700">
+                        {order.items && order.items.length > 0 ? (
+                            order.items.map((item, index) => (
+                                <tr key={item.id} className={`border-b border-slate-100 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                                    <td className="py-3 px-2">{item.description}</td>
+                                    <td className="py-3 px-2 text-center">
+                                        <span className="text-[10px] border border-slate-200 px-1 rounded uppercase">{item.type === 'PART' ? 'Peça' : 'Serv'}</span>
+                                    </td>
+                                    <td className="py-3 px-2 text-center">{item.quantity}</td>
+                                    <td className="py-3 px-2 text-right font-mono">R$ {item.unitPrice.toFixed(2)}</td>
+                                    <td className="py-3 px-2 text-right font-mono font-medium">R$ {item.totalPrice.toFixed(2)}</td>
+                                </tr>
+                            ))
+                        ) : (
+                            <>
+                                <tr className="border-b border-slate-100"><td className="py-3 px-2">Mão de Obra (Geral)</td><td className="text-center">SERV</td><td className="text-center">1</td><td className="text-right">R$ {order.laborCost.toFixed(2)}</td><td className="text-right">R$ {order.laborCost.toFixed(2)}</td></tr>
+                                <tr className="border-b border-slate-100"><td className="py-3 px-2">Peças (Geral)</td><td className="text-center">PEÇA</td><td className="text-center">1</td><td className="text-right">R$ {order.partsCost.toFixed(2)}</td><td className="text-right">R$ {order.partsCost.toFixed(2)}</td></tr>
+                            </>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Totais e Pagamento */}
+            <div className="flex justify-end mb-12">
+                <div className="w-1/2">
+                    <div className="flex justify-between py-2 border-b border-slate-100 text-sm text-slate-600">
+                        <span>Subtotal Serviços</span>
+                        <span>R$ {order.laborCost.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-slate-100 text-sm text-slate-600">
+                        <span>Subtotal Peças</span>
+                        <span>R$ {order.partsCost.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between py-3 text-lg font-bold text-slate-900 border-b-2 border-slate-900 mt-2">
+                        <span>TOTAL A PAGAR</span>
+                        <span>R$ {order.totalCost.toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="mt-4 bg-green-50 border border-green-100 p-3 rounded text-center">
+                        <p className="text-green-800 font-bold text-sm uppercase flex items-center justify-center gap-2">
+                            <CheckCircle size={16}/> Pagamento Confirmado
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                            Método: {order.paymentMethod} | Data: {order.paymentDate ? new Date(order.paymentDate).toLocaleDateString() : '-'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Rodapé / Assinatura */}
+            <div className="mt-auto pt-12 border-t border-slate-200">
+                <div className="grid grid-cols-2 gap-12 text-center">
+                    <div>
+                        <div className="border-b border-slate-400 mb-2"></div>
+                        <p className="text-xs text-slate-500 uppercase">Assinatura da Oficina</p>
+                    </div>
+                    <div>
+                        <div className="border-b border-slate-400 mb-2"></div>
+                        <p className="text-xs text-slate-500 uppercase">Assinatura do Cliente</p>
+                    </div>
+                </div>
+                <div className="text-center mt-8 text-[10px] text-slate-400">
+                    <p>Garantia de serviços de 90 dias conforme lei vigente.</p>
+                    <p>Sistema OSMech - Gestão Inteligente</p>
+                </div>
+            </div>
+
         </div>
       </div>
     </div>
@@ -1269,6 +1346,12 @@ export default function App() {
           description: '', type: 'LABOR', quantity: 1, unitPrice: 0
       });
 
+      // Update Local state when selectedOS changes (from list view navigation)
+      useEffect(() => {
+          setOs(selectedOS);
+          setItems(selectedOS.items || []);
+      }, [selectedOS]);
+
       // Recalculate costs whenever items change
       useEffect(() => {
           const labor = items.filter(i => i.type === 'LABOR').reduce((acc, i) => acc + i.totalPrice, 0);
@@ -1306,25 +1389,49 @@ export default function App() {
           setItems(items.filter(i => i.id !== id));
       };
 
-      // Call Mutation: updateServiceOrderStatus
-      const handleSave = () => {
-          setOrders(prev => prev.map(o => o.id === os.id ? os : o));
-          setSelectedOS(os);
-          addLog('UPDATE', `Editou Detalhes OS ${os.id}`, os.id);
-          setEditMode(false);
-          alert('OS Atualizada com sucesso!');
+      // Draft Changes (Local State Only)
+      const changeStatusLocal = (newStatus: OSStatus) => {
+         setOs(prev => ({ ...prev, status: newStatus }));
       };
 
-      const changeStatus = (newStatus: OSStatus) => {
-         updateServiceOrderStatus(os.id, newStatus);
-      };
-
-      const handleAssignMechanic = (e: React.ChangeEvent<HTMLSelectElement>) => {
-         assignMechanic(os.id, e.target.value);
+      const handleAssignMechanicLocal = (e: React.ChangeEvent<HTMLSelectElement>) => {
+         const val = e.target.value;
+         setOs(prev => ({ ...prev, assignedMechanicId: val }));
       }
 
+      // Final Save Action
+      const handleSave = () => {
+          // 1. Check for status change for notification
+          if (os.status !== selectedOS.status) {
+               const notif = generateNotification(os, os.status);
+               if (notif) os.notifications = [notif, ...(os.notifications || [])];
+          }
+
+          // 2. Update Global State
+          setOrders(prev => prev.map(o => o.id === os.id ? os : o));
+          
+          // 3. Logs
+          if (os.assignedMechanicId !== selectedOS.assignedMechanicId) {
+               const mechName = MOCK_USERS.find(u => u.id === os.assignedMechanicId)?.name || os.assignedMechanicId;
+               addLog('UPDATE', `Atribuiu mecânico ${mechName} à OS ${os.id}`, os.id);
+          }
+          if (os.status !== selectedOS.status) {
+               addLog('UPDATE', `Alterou status OS ${os.id} para ${os.status}`, os.id);
+          } else {
+               addLog('UPDATE', `Editou Detalhes OS ${os.id}`, os.id);
+          }
+
+          setSelectedOS(os); // Update the source
+          setEditMode(false);
+          alert('Alterações salvas com sucesso!');
+      };
+
+      // Call Mutation: registrarPagamento (Immediate action, not draft)
       const handlePaymentConfirm = (input: PaymentInput) => {
           registerPayment(os.id, input);
+          setOs(prev => ({ ...prev, status: OSStatus.PAID, paymentMethod: input.method, paymentDate: new Date().toISOString() }));
+          setShowPaymentModal(false); // Close payment modal
+          setTimeout(() => setShowReceiptModal(true), 500); // Open receipt automatically
       }
 
       const sendPreventiveReminder = () => {
@@ -1333,6 +1440,7 @@ export default function App() {
               const updated = { ...os, notifications: [notification, ...(os.notifications || [])] };
               setOrders(prev => prev.map(o => o.id === os.id ? updated : o));
               setSelectedOS(updated);
+              setOs(updated);
               alert("Lembrete Preventivo enviado com sucesso!");
           } else {
               alert("Cliente não autorizou notificações ou não há dados preventivos.");
@@ -1366,7 +1474,7 @@ export default function App() {
                   <div className="ml-auto flex gap-2">
                       {editMode ? (
                           <>
-                            <button onClick={() => {setEditMode(false); setItems(selectedOS.items || [])}} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                            <button onClick={() => {setEditMode(false); setOs(selectedOS); setItems(selectedOS.items || [])}} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
                             <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg flex items-center gap-2"><Save size={18}/> Salvar</button>
                           </>
                       ) : (
@@ -1436,7 +1544,7 @@ export default function App() {
                                         <select 
                                             className="w-full p-2 border border-slate-300 rounded-lg bg-white"
                                             value={os.assignedMechanicId || ''}
-                                            onChange={handleAssignMechanic}
+                                            onChange={handleAssignMechanicLocal}
                                         >
                                             <option value="">Selecione...</option>
                                             {MOCK_USERS.filter(u => u.role === 'MECHANIC').map(u => (
@@ -1580,7 +1688,7 @@ export default function App() {
                                         <button 
                                             key={s} 
                                             disabled={!editMode}
-                                            onClick={() => changeStatus(s)}
+                                            onClick={() => changeStatusLocal(s)}
                                             className={`text-left px-3 py-2 rounded-lg text-sm transition-all border ${os.status === s ? 'bg-blue-50 border-blue-500 text-blue-700 font-semibold shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-50'}`}
                                         >
                                             {s}
@@ -1751,170 +1859,139 @@ export default function App() {
   }
 
   const ChatView = () => {
-    const [messages, setMessages] = useState<{role: 'user'|'model', text: string}[]>([
-        {role: 'model', text: 'Olá! Sou o assistente virtual da oficina OSMech. Como posso ajudar com dúvidas técnicas ou gestão hoje?'}
+    const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([
+        { role: 'model', text: "Olá! Sou o assistente técnico da OSMech. Posso ajudar com manuais, códigos de erro, dicas de gestão ou dúvidas sobre mecânica. Como posso ajudar hoje?" }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
 
-    useEffect(() => {
-      scrollToBottom();
-    }, [messages]);
+    useEffect(scrollToBottom, [messages]);
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if(!input.trim()) return;
+        if (!input.trim()) return;
 
         const userMsg = input;
-        setMessages(prev => [...prev, {role: 'user', text: userMsg}]);
+        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
         setInput('');
         setLoading(true);
 
+        // Optimistic update for UI, pass current history + new message to service
         const response = await getShopAssistantChat(messages, userMsg);
         
-        setMessages(prev => [...prev, {role: 'model', text: response}]);
+        setMessages(prev => [...prev, { role: 'model', text: response }]);
         setLoading(false);
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-14rem)] animate-fade-in">
-            <Card title="Chat Técnico & Gestão" className="lg:col-span-2 flex flex-col h-full border-blue-200 shadow-sm">
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 rounded-lg border border-slate-100 mb-4">
-                    {messages.map((m, i) => (
-                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                                m.role === 'user' 
-                                ? 'bg-blue-600 text-white rounded-br-none' 
-                                : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'
-                            }`}>
-                                <ReactMarkdown>{m.text}</ReactMarkdown>
-                            </div>
+        <Card title="Assistente Técnico Virtual (IA)" className="h-[calc(100vh-12rem)] flex flex-col">
+            <div className="flex-1 overflow-y-auto space-y-4 p-4 mb-4 bg-slate-50 rounded-lg border border-slate-100">
+                {messages.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-xl text-sm leading-relaxed ${
+                            m.role === 'user' 
+                            ? 'bg-blue-600 text-white rounded-br-none shadow-md' 
+                            : 'bg-white text-slate-700 border border-slate-200 rounded-bl-none shadow-sm'
+                        }`}>
+                            <ReactMarkdown>{m.text}</ReactMarkdown>
                         </div>
-                    ))}
-                    {loading && (
-                        <div className="flex justify-start">
-                            <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-bl-none flex items-center gap-2 text-slate-400">
-                                <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
-                                <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce delay-75"></div>
-                                <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce delay-150"></div>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
-                <form onSubmit={handleSend} className="flex gap-2">
-                    <input 
-                      type="text" 
-                      className="flex-1 p-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors text-sm"
-                      placeholder="Digite sua dúvida técnica, ex: 'Torque cabeçote motor Fire 1.0'..."
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      disabled={loading}
-                    />
-                    <button 
-                      type="submit" 
-                      disabled={loading || !input.trim()}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white p-3 rounded-lg transition-colors shadow-sm"
-                    >
-                        <Send size={20} />
-                    </button>
-                </form>
-            </Card>
-
-            <div className="space-y-6">
-                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
-                    <Bot size={48} className="absolute -right-4 -bottom-4 opacity-20"/>
-                    <h3 className="font-bold text-lg mb-2 flex items-center gap-2"><Bot size={20}/> Assistente Gemini</h3>
-                    <p className="text-blue-100 text-xs leading-relaxed">
-                        Utilize nossa IA para consultar manuais técnicos, códigos de falha, procedimentos de reparo e dicas administrativas.
-                    </p>
-                </div>
-
-                <Card title="Sugestões">
-                    <div className="flex flex-col gap-2">
-                        {[
-                            "Sintomas de falha na sonda lambda",
-                            "Qual óleo usar no Honda Civic 2015?",
-                            "Código de erro P0300 - O que é?",
-                            "Como calcular mão de obra justa?"
-                        ].map((q, i) => (
-                            <button 
-                                key={i} 
-                                onClick={() => setInput(q)} 
-                                className="text-left text-xs p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-slate-600 transition-colors"
-                            >
-                                {q}
-                            </button>
-                        ))}
                     </div>
-                </Card>
+                ))}
+                {loading && (
+                    <div className="flex justify-start">
+                         <div className="bg-white p-3 rounded-xl rounded-bl-none border border-slate-200 shadow-sm flex items-center gap-2 text-slate-500 text-sm">
+                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                             <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                         </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
             </div>
-        </div>
-    );
+            <form onSubmit={handleSend} className="flex gap-2">
+                <input 
+                    type="text" 
+                    className="flex-1 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="Digite sua dúvida técnica..."
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    disabled={loading}
+                />
+                <button 
+                    type="submit" 
+                    disabled={loading || !input.trim()}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 rounded-lg font-bold transition-colors flex items-center gap-2"
+                >
+                    <Send size={18} /> <span className="hidden sm:inline">Enviar</span>
+                </button>
+            </form>
+        </Card>
+    )
   };
 
   const ReportsView = () => {
       return (
           <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card title="Distribuição de Receita">
-                      <div className="h-64 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                              <RePieChart>
-                                  <Pie
-                                      data={chartRevenueBreakdown}
-                                      cx="50%"
-                                      cy="50%"
-                                      innerRadius={60}
-                                      outerRadius={80}
-                                      paddingAngle={5}
-                                      dataKey="value"
-                                  >
-                                      {chartRevenueBreakdown.map((entry, index) => (
-                                          <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#f97316'} />
-                                      ))}
-                                  </Pie>
-                                  <Tooltip 
-                                      contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                                      formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Valor']}
-                                  />
-                                  <Legend verticalAlign="bottom" height={36}/>
-                              </RePieChart>
-                          </ResponsiveContainer>
-                      </div>
-                  </Card>
-
-                   <Card title="Auditoria (Logs de Segurança)">
-                      <div className="h-64 overflow-y-auto pr-2">
-                          <div className="space-y-4">
+              <Card title="Auditoria de Segurança (Logs do Sistema)">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
+                              <tr>
+                                  <th className="p-3">Data/Hora</th>
+                                  <th className="p-3">Usuário</th>
+                                  <th className="p-3">Ação</th>
+                                  <th className="p-3">Detalhes</th>
+                                  <th className="p-3">Ref.</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
                               {logs.map(log => (
-                                  <div key={log.id} className="flex gap-3 text-sm border-b border-slate-50 pb-3 last:border-0">
-                                      <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${
-                                          log.action === 'DELETE' ? 'bg-red-500' : 
-                                          log.action === 'FINANCE' ? 'bg-green-500' : 'bg-blue-400'
-                                      }`} />
-                                      <div>
-                                          <div className="flex items-center gap-2">
-                                              <span className="font-bold text-slate-700">{log.userName}</span>
-                                              <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">{log.action}</span>
-                                          </div>
-                                          <p className="text-slate-600 leading-snug">{log.details}</p>
-                                          <span className="text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleString()}</span>
-                                      </div>
-                                  </div>
+                                  <tr key={log.id} className="hover:bg-slate-50">
+                                      <td className="p-3 text-slate-500 font-mono text-xs whitespace-nowrap">
+                                          {new Date(log.timestamp).toLocaleString()}
+                                      </td>
+                                      <td className="p-3 font-medium text-slate-700 whitespace-nowrap">
+                                          {log.userName}
+                                      </td>
+                                      <td className="p-3">
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                              log.action === 'DELETE' ? 'bg-red-100 text-red-700' :
+                                              log.action === 'LOGIN' ? 'bg-blue-100 text-blue-700' :
+                                              log.action === 'FINANCE' ? 'bg-green-100 text-green-700' :
+                                              'bg-slate-100 text-slate-600'
+                                          }`}>
+                                              {log.action}
+                                          </span>
+                                      </td>
+                                      <td className="p-3 text-slate-600 min-w-[200px]" title={log.details}>
+                                          {log.details}
+                                      </td>
+                                      <td className="p-3 text-xs font-mono text-slate-400 whitespace-nowrap">
+                                          {log.targetId || '-'}
+                                      </td>
+                                  </tr>
                               ))}
-                          </div>
-                      </div>
-                  </Card>
+                          </tbody>
+                      </table>
+                      {logs.length === 0 && <p className="p-6 text-center text-slate-400">Nenhum registro de auditoria encontrado.</p>}
+                  </div>
+              </Card>
+
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl text-yellow-800 text-sm flex items-start gap-3">
+                  <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                  <div>
+                      <h4 className="font-bold mb-1">Nota de Compliance (LGPD & Fiscal)</h4>
+                      <p>Todos os registros de exclusão (DELETE) mantêm um backup "snapshot" invisível no banco de dados para fins de auditoria fiscal e recuperação de desastres, conforme exigido por lei.</p>
+                  </div>
               </div>
           </div>
       )
-  }
+  };
 
   // --- Main Render ---
 

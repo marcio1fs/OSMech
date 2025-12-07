@@ -1608,14 +1608,159 @@ const AIChatView = ({ history }: any) => {
     );
 };
 
-const SettingsView = ({ company, onUpdate }: any) => (
-    <Card title="Configurações">
-        <div className="p-4">
-            <p>Nome: {company.name}</p>
-            <p>CNPJ: {company.cnpj}</p>
+const SettingsView = ({ company, onUpdate }: { company: CompanySettings, onUpdate: (c: CompanySettings) => void }) => {
+    const [activeTab, setActiveTab] = useState<'COMPANY' | 'NOTIFICATIONS' | 'SYSTEM'>('COMPANY');
+    const [formData, setFormData] = useState<CompanySettings>(company);
+    const [notificationTemplates, setNotificationTemplates] = useState({
+        whatsapp_os_created: "Sua OS #{id} foi aberta! Problema relatado: {complaint}. Aguarde nosso contato.",
+        whatsapp_os_completed: "Olá! O serviço no veículo {vehicle} foi concluído. Total: {total}. Venha retirar!",
+    });
+
+    // Sync form data if company prop changes (though usually it won't change externally while editing)
+    useEffect(() => {
+        setFormData(company);
+    }, [company]);
+
+    const handleSaveCompany = () => {
+        onUpdate(formData);
+        alert("Configurações da empresa salvas com sucesso!");
+    };
+
+    const handleExportData = () => {
+        const data = JSON.stringify({ company, date: new Date().toISOString() }, null, 2);
+        const blob = new Blob([data], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup-osmech-${Date.now()}.json`;
+        a.click();
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-hidden shadow-sm">
+                 <button onClick={() => setActiveTab('COMPANY')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'COMPANY' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <Building2 size={18}/> Dados da Oficina
+                </button>
+                <button onClick={() => setActiveTab('NOTIFICATIONS')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'NOTIFICATIONS' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <MessageCircle size={18}/> Mensagens & Notificações
+                </button>
+                <button onClick={() => setActiveTab('SYSTEM')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'SYSTEM' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <Database size={18}/> Sistema & Backup
+                </button>
+            </div>
+
+            {activeTab === 'COMPANY' && (
+                <Card title="Dados Cadastrais da Oficina" action={<button onClick={handleSaveCompany} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2"><Save size={16}/> Salvar Alterações</button>}>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nome Fantasia</label>
+                             <input 
+                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase font-semibold"
+                                value={formData.name}
+                                onChange={handleUppercaseChange(val => setFormData({...formData, name: val}))}
+                             />
+                        </div>
+                        <div className="md:col-span-2">
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Subtítulo / Slogan</label>
+                             <input 
+                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase text-sm"
+                                value={formData.subtitle || ''}
+                                onChange={handleUppercaseChange(val => setFormData({...formData, subtitle: val}))}
+                             />
+                        </div>
+                        <div>
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">CNPJ</label>
+                             <input 
+                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                                value={formData.cnpj}
+                                onChange={e => setFormData({...formData, cnpj: formatCNPJ(e.target.value)})}
+                             />
+                        </div>
+                        <div>
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Telefone Principal</label>
+                             <input 
+                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                value={formData.phone}
+                                onChange={e => setFormData({...formData, phone: formatPhone(e.target.value)})}
+                             />
+                        </div>
+                        <div className="md:col-span-2">
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Endereço Completo</label>
+                             <input 
+                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase text-sm"
+                                value={formData.address}
+                                onChange={handleUppercaseChange(val => setFormData({...formData, address: val}))}
+                             />
+                        </div>
+                        <div className="md:col-span-2">
+                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">E-mail de Contato</label>
+                             <input 
+                                type="email"
+                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm lowercase"
+                                value={formData.email || ''}
+                                onChange={e => setFormData({...formData, email: e.target.value})}
+                             />
+                        </div>
+                   </div>
+                </Card>
+            )}
+
+            {activeTab === 'NOTIFICATIONS' && (
+                <Card title="Modelos de Mensagens Automáticas">
+                    <div className="space-y-6">
+                        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg text-sm text-yellow-800 mb-4">
+                            <p className="font-bold flex items-center gap-2"><AlertTriangle size={16}/> Variáveis Disponíveis:</p>
+                            <p className="mt-1">{`{id}, {customer}, {vehicle}, {plate}, {total}, {complaint}`}</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Mensagem de Abertura de OS</label>
+                            <textarea 
+                                rows={3}
+                                className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={notificationTemplates.whatsapp_os_created}
+                                onChange={(e) => setNotificationTemplates({...notificationTemplates, whatsapp_os_created: e.target.value})}
+                            />
+                        </div>
+
+                         <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Mensagem de Conclusão / Retirada</label>
+                            <textarea 
+                                rows={3}
+                                className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={notificationTemplates.whatsapp_os_completed}
+                                onChange={(e) => setNotificationTemplates({...notificationTemplates, whatsapp_os_completed: e.target.value})}
+                            />
+                        </div>
+
+                        <div className="flex justify-end">
+                            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Salvar Modelos</button>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {activeTab === 'SYSTEM' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card title="Backup de Dados">
+                        <p className="text-sm text-slate-600 mb-4">Exporte todos os dados da oficina (clientes, OSs, financeiro) para um arquivo JSON seguro.</p>
+                        <button onClick={handleExportData} className="w-full border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                            <Download size={18}/> Fazer Backup Agora
+                        </button>
+                    </Card>
+
+                    <Card title="Zona de Perigo">
+                        <p className="text-sm text-slate-600 mb-4">Ações irreversíveis para resetar o sistema.</p>
+                        <button onClick={() => alert("Funcionalidade bloqueada na demonstração.")} className="w-full bg-red-50 border border-red-200 hover:bg-red-100 text-red-700 font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                            <Trash2 size={18}/> Resetar Configurações de Fábrica
+                        </button>
+                    </Card>
+                </div>
+            )}
         </div>
-    </Card>
-);
+    );
+};
 
 const DashboardView = ({ orders, expenses, logs, onViewOS, onNewOS }: { orders: ServiceOrder[], expenses: Expense[], logs: AuditLogEntry[], onViewOS: (id: string) => void, onNewOS: () => void }) => {
   const totalRevenue = orders.reduce((acc, o) => acc + (o.totalCost || 0), 0);

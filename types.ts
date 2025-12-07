@@ -52,12 +52,27 @@ export interface Expense {
   description: string;
   amount: number;
   category: 'FIXED' | 'VARIABLE' | 'PAYROLL' | 'PARTS' | 'TAXES';
-  date: string;
+  date: string; // Data de competência/lançamento
+  dueDate?: string; // Data de Vencimento
+  status?: 'PAID' | 'PENDING';
   userId: string; // Quem registrou
 }
 
 export type ExpenseCategoryLabel = {
   [key in Expense['category']]: string;
+}
+
+export interface InventoryItem {
+    id: string;
+    code: string;
+    name: string;
+    description?: string;
+    manufacturer?: string;
+    costPrice: number; // Preço de Custo
+    sellPrice: number; // Preço de Venda
+    stockQuantity: number;
+    minStockLevel: number; // Estoque mínimo para alerta
+    category: string;
 }
 
 // --- Mutation Inputs ---

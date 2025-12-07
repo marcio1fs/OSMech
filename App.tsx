@@ -79,7 +79,10 @@ import {
   Brain,
   Package,
   AlertCircle,
-  PlayCircle
+  PlayCircle,
+  ArrowUpRight,
+  ArrowDownRight,
+  FileBarChart
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend, AreaChart, Area } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -98,7 +101,8 @@ import {
     ServiceItem,
     CompanySettings,
     Expense,
-    ExpenseCategoryLabel
+    ExpenseCategoryLabel,
+    InventoryItem
 } from './types';
 import { getMechanicDiagnosis, getShopAssistantChat, analyzePartImage } from './services/geminiService';
 import { Card, StatCard } from './components/Card';
@@ -109,24 +113,6 @@ const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Roberto (Admin)', role: 'ADMIN', avatar: 'RO' },
   { id: 'u2', name: 'Carlos (Mecânico)', role: 'MECHANIC', avatar: 'CA' },
   { id: 'u3', name: 'Jorge (Mecânico)', role: 'MECHANIC', avatar: 'JO' }
-];
-
-// Listas separadas para filtragem contextual
-const COMMON_PARTS = [
-    "ÓLEO MOTOR 5W30", "ÓLEO MOTOR 10W40", "FILTRO DE ÓLEO", "FILTRO DE AR", "FILTRO DE COMBUSTÍVEL",
-    "FILTRO DE CABINE", "PASTILHA DE FREIO DIANTEIRA", "PASTILHA DE FREIO TRASEIRA", "DISCO DE FREIO DIANTEIRO",
-    "DISCO DE FREIO TRASEIRO", "FLUIDO DE FREIO DOT4", "CORREIA DENTADA", "TENSOR DA CORREIA", "BOMBA D'ÁGUA",
-    "VELAS DE IGNIÇÃO", "CABOS DE VELA", "BOBINA DE IGNIÇÃO", "BATERIA 60AH", "BATERIA 70AH",
-    "AMORTECEDOR DIANTEIRO", "AMORTECEDOR TRASEIRO", "KIT EMBREAGEM", "ADITIVO RADIADOR",
-    "LÂMPADA H4", "LÂMPADA H7", "PALHETA LIMPADOR", "VÁLVULA TERMOSTÁTICA", "SENSOR DE OXIGÊNIO"
-];
-
-const COMMON_SERVICES = [
-    "MÃO DE OBRA (HORA TÉCNICA)", "DIAGNÓSTICO SCANNER", "TROCA DE ÓLEO E FILTRO",
-    "SUBSTITUIÇÃO PASTILHAS", "SUBSTITUIÇÃO DISCOS", "SANGRIA DE FREIOS", "ALINHAMENTO 3D",
-    "BALANCEAMENTO DE RODAS", "LIMPEZA DE BICOS INJETORES", "SUBSTITUIÇÃO CORREIA DENTADA",
-    "REVISÃO SUSPENSÃO", "TROCA DE EMBREAGEM", "HIGIENIZAÇÃO AR CONDICIONADO",
-    "REVISÃO ELÉTRICA", "INSTALAÇÃO ACESSÓRIOS", "LAVAGEM DE MOTOR", "REVISÃO GERAL"
 ];
 
 const COMMON_MANUFACTURERS = [
@@ -143,9 +129,15 @@ const EXPENSE_CATEGORIES: ExpenseCategoryLabel = {
 };
 
 const INITIAL_EXPENSES: Expense[] = [
-    { id: 'e1', description: 'ALUGUEL GALPÃO', amount: 2500, category: 'FIXED', date: new Date(Date.now() - 86400000 * 10).toISOString(), userId: 'u1' },
-    { id: 'e2', description: 'CONTA DE LUZ', amount: 450, category: 'FIXED', date: new Date(Date.now() - 86400000 * 5).toISOString(), userId: 'u1' },
-    { id: 'e3', description: 'LOTE DE ÓLEO 5W30', amount: 800, category: 'PARTS', date: new Date(Date.now() - 86400000 * 2).toISOString(), userId: 'u1' },
+    { id: 'e1', description: 'ALUGUEL GALPÃO', amount: 2500, category: 'FIXED', date: new Date(Date.now() - 86400000 * 10).toISOString(), dueDate: new Date(Date.now() - 86400000 * 10).toISOString(), status: 'PAID', userId: 'u1' },
+    { id: 'e2', description: 'CONTA DE LUZ', amount: 450, category: 'FIXED', date: new Date(Date.now() - 86400000 * 5).toISOString(), dueDate: new Date(Date.now() - 86400000 * 5).toISOString(), status: 'PAID', userId: 'u1' },
+    { id: 'e3', description: 'LOTE DE ÓLEO 5W30', amount: 800, category: 'PARTS', date: new Date(Date.now() - 86400000 * 2).toISOString(), dueDate: new Date(Date.now() + 86400000 * 20).toISOString(), status: 'PENDING', userId: 'u1' },
+];
+
+const INITIAL_INVENTORY: InventoryItem[] = [
+    { id: 'i1', code: 'OLEO-5W30', name: 'ÓLEO MOTOR 5W30 SINTÉTICO', manufacturer: 'SHELL', category: 'LUBRIFICANTES', costPrice: 35.00, sellPrice: 65.00, stockQuantity: 45, minStockLevel: 10 },
+    { id: 'i2', code: 'FIL-AR-01', name: 'FILTRO DE AR GOL/VOYAGE', manufacturer: 'TECFIL', category: 'FILTROS', costPrice: 15.00, sellPrice: 35.00, stockQuantity: 8, minStockLevel: 5 },
+    { id: 'i3', code: 'PAST-D-01', name: 'PASTILHA FREIO DIANT. PALIO', manufacturer: 'COBREQ', category: 'FREIOS', costPrice: 60.00, sellPrice: 120.00, stockQuantity: 2, minStockLevel: 4 },
 ];
 
 const INITIAL_DATA: ServiceOrder[] = [
@@ -237,6 +229,10 @@ const handleUppercaseChange = (setter: (val: any) => void) => (e: React.ChangeEv
     setter(e.target.value.toUpperCase());
 };
 
+const formatDateInput = (dateStr: string) => {
+    return dateStr.split('T')[0];
+}
+
 // --- Mask Helpers ---
 const formatCPF = (value: string) => {
     return value
@@ -276,6 +272,18 @@ const convertFileToBase64 = (file: File): Promise<string> => {
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = error => reject(error);
     });
+};
+
+const downloadCSV = (content: string, fileName: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // --- Setup View Component (Onboarding) ---
@@ -931,601 +939,433 @@ const NavItem = ({ icon, label, active, onClick }: any) => (
     </button>
 );
 
-const AIDiagnosisPanel = ({ order, onUpdate, onLog }: { order: ServiceOrder, onUpdate: (o: ServiceOrder) => void, onLog: any }) => {
-    const [isLoading, setIsLoading] = useState(false);
+const FinanceView = ({ expenses, orders, onAddExpense, inventory, onUpdateInventory, onAddInventory }: { expenses: Expense[], orders: ServiceOrder[], onAddExpense: (e: Expense) => void, inventory: InventoryItem[], onUpdateInventory: (item: InventoryItem) => void, onAddInventory: (item: InventoryItem) => void }) => {
+    const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'ENTRIES' | 'INVENTORY' | 'REPORTS'>('DASHBOARD');
+    const [newExpense, setNewExpense] = useState<Partial<Expense>>({ description: '', amount: 0, category: 'VARIABLE', date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+    const [newItem, setNewItem] = useState<Partial<InventoryItem>>({ code: '', name: '', costPrice: 0, sellPrice: 0, stockQuantity: 0, minStockLevel: 0, category: 'GERAL' });
 
-    const runDiagnosis = async () => {
-        setIsLoading(true);
-        const result = await getMechanicDiagnosis(
-            `${order.vehicleManufacturer} ${order.vehicleModel} ${order.vehicleYear || ''}`,
-            order.complaint,
-            order.currentMileage
-        );
-        if (result) {
-            onUpdate({ ...order, aiDiagnosis: result });
-            onLog('UPDATE', `Executou Diagnóstico IA na OS ${order.id}`);
-        } else {
-            alert("Não foi possível gerar o diagnóstico. Tente novamente.");
-        }
-        setIsLoading(false);
+    // Financial Calculation Logic
+    const paidOrders = orders.filter(o => o.status === OSStatus.PAID);
+    const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalCost, 0);
+    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const netProfit = totalRevenue - totalExpenses;
+    
+    // Alert Logic
+    const overdueExpenses = expenses.filter(e => e.status === 'PENDING' && new Date(e.dueDate || '') < new Date());
+    const lowStockItems = inventory.filter(i => i.stockQuantity <= i.minStockLevel);
+
+    const handleAddExpense = () => {
+        if (!newExpense.description || !newExpense.amount) return;
+        onAddExpense({
+            id: Date.now().toString(),
+            userId: 'u1', // Mock user
+            description: newExpense.description.toUpperCase(),
+            amount: Number(newExpense.amount),
+            category: newExpense.category as any,
+            date: newExpense.date as string,
+            dueDate: newExpense.date as string, // Simplification
+            status: newExpense.status as any
+        });
+        setNewExpense({ description: '', amount: 0, category: 'VARIABLE', date: new Date().toISOString().split('T')[0], status: 'PENDING' });
     };
 
-    const addPart = (part: { name: string, estimatedCost: number }) => {
-        const newItem: ServiceItem = {
+    const handleAddItem = () => {
+        if (!newItem.name || !newItem.code) return;
+        onAddInventory({
             id: Date.now().toString(),
-            description: part.name.toUpperCase(),
-            type: 'PART',
-            quantity: 1,
-            unitPrice: part.estimatedCost,
-            totalPrice: part.estimatedCost
-        };
-        const updatedItems = [...(order.items || []), newItem];
-        const subTotal = (order.laborCost) + (order.partsCost + newItem.totalPrice);
+            code: newItem.code.toUpperCase(),
+            name: newItem.name.toUpperCase(),
+            costPrice: Number(newItem.costPrice),
+            sellPrice: Number(newItem.sellPrice),
+            stockQuantity: Number(newItem.stockQuantity),
+            minStockLevel: Number(newItem.minStockLevel),
+            category: newItem.category?.toUpperCase() || 'GERAL'
+        });
+        setNewItem({ code: '', name: '', costPrice: 0, sellPrice: 0, stockQuantity: 0, minStockLevel: 0, category: 'GERAL' });
+    };
+
+    const generateDRE = () => {
+        const partsRevenue = paidOrders.reduce((acc, o) => acc + o.partsCost, 0);
+        const laborRevenue = paidOrders.reduce((acc, o) => acc + o.laborCost, 0);
+        const grossRevenue = partsRevenue + laborRevenue;
         
-        onUpdate({
-            ...order,
-            items: updatedItems,
-            partsCost: order.partsCost + newItem.totalPrice,
-            totalCost: subTotal - (subTotal * ((order.discountPercentage || 0) / 100))
-        });
-        onLog('UPDATE', `Adicionou peça sugerida pela IA: ${part.name}`);
+        const variableCosts = expenses.filter(e => e.category === 'PARTS' || e.category === 'VARIABLE').reduce((acc, e) => acc + e.amount, 0);
+        const taxes = expenses.filter(e => e.category === 'TAXES').reduce((acc, e) => acc + e.amount, 0);
+        const fixedCosts = expenses.filter(e => e.category === 'FIXED' || e.category === 'PAYROLL').reduce((acc, e) => acc + e.amount, 0);
+        
+        const netOperatingProfit = grossRevenue - variableCosts - taxes - fixedCosts;
+
+        return { partsRevenue, laborRevenue, grossRevenue, variableCosts, taxes, fixedCosts, netOperatingProfit };
     };
 
-    const addLabor = (hours: number) => {
-        const hourlyRate = 150; // Valor hora padrão
-        const cost = hours * hourlyRate;
-        const newItem: ServiceItem = {
-            id: Date.now().toString(),
-            description: `MÃO DE OBRA (${hours}H ESTIMADAS)`,
-            type: 'LABOR',
-            quantity: 1,
-            unitPrice: cost,
-            totalPrice: cost,
-            status: 'PENDING'
-        };
-        const updatedItems = [...(order.items || []), newItem];
-        const subTotal = (order.laborCost + cost) + order.partsCost;
+    const dreData = generateDRE();
 
-        onUpdate({
-            ...order,
-            items: updatedItems,
-            laborCost: order.laborCost + cost,
-            totalCost: subTotal - (subTotal * ((order.discountPercentage || 0) / 100))
-        });
-        onLog('UPDATE', `Adicionou Mão de Obra sugerida pela IA: ${hours}h`);
-    };
+    const chartData = useMemo(() => {
+        const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun']; // Simplificação mock
+        return months.map((m, i) => ({
+            name: m,
+            receita: i === 5 ? totalRevenue : Math.random() * 5000,
+            despesa: i === 5 ? totalExpenses : Math.random() * 3000,
+        }));
+    }, [totalRevenue, totalExpenses]);
 
-    if (!order.aiDiagnosis && !isLoading) {
-        return (
-            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl p-6 text-white shadow-lg mb-6 flex items-center justify-between">
-                <div>
-                    <h3 className="text-xl font-bold flex items-center gap-2"><Bot size={24} className="animate-pulse"/> Assistente de Diagnóstico (IA)</h3>
-                    <p className="text-indigo-100 mt-1 max-w-xl">
-                        Utilize nossa inteligência artificial para analisar os sintomas relatados, sugerir diagnósticos prováveis e recomendar peças e serviços para este veículo.
-                    </p>
-                </div>
-                <button 
-                    onClick={runDiagnosis}
-                    className="px-6 py-3 bg-white text-indigo-700 rounded-lg font-bold shadow-lg hover:bg-indigo-50 transition-colors flex items-center gap-2"
-                >
-                    <PlayCircle size={20}/> Iniciar Diagnóstico
-                </button>
-            </div>
-        );
-    }
+    const pieData = Object.keys(EXPENSE_CATEGORIES).map(cat => ({
+        name: EXPENSE_CATEGORIES[cat as keyof ExpenseCategoryLabel],
+        value: expenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0)
+    })).filter(d => d.value > 0);
 
-    if (isLoading) {
-        return (
-            <div className="bg-white border border-indigo-100 rounded-xl p-8 shadow-sm mb-6 flex flex-col items-center justify-center text-center">
-                <Loader size={48} className="text-indigo-600 animate-spin mb-4"/>
-                <h3 className="text-lg font-bold text-slate-800">Analisando Sintomas...</h3>
-                <p className="text-slate-500">Consultando base de conhecimento mecânica e defeitos crônicos do modelo.</p>
-            </div>
-        );
-    }
-
-    const result = order.aiDiagnosis!;
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
     return (
-        <Card className="mb-6 border-indigo-200 shadow-indigo-100">
-            <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100 flex justify-between items-center -mt-6 -mx-6 rounded-t-xl mb-6">
-                <h3 className="text-indigo-900 font-bold flex items-center gap-2"><Bot size={20}/> Diagnóstico Inteligente</h3>
-                <button onClick={runDiagnosis} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline">Refazer Análise</button>
+        <div className="space-y-6">
+            {/* Alerts Banner */}
+            {overdueExpenses.length > 0 && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-3 animate-pulse">
+                    <AlertTriangle size={20}/>
+                    <span className="font-bold">Atenção: Existem {overdueExpenses.length} contas vencidas pendentes de pagamento!</span>
+                </div>
+            )}
+            {lowStockItems.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 text-orange-700 p-4 rounded-lg flex items-center gap-3">
+                    <Package size={20}/>
+                    <span className="font-bold">Estoque: {lowStockItems.length} itens abaixo do nível mínimo.</span>
+                </div>
+            )}
+
+            {/* Navigation Tabs */}
+            <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-hidden shadow-sm">
+                <button onClick={() => setActiveTab('DASHBOARD')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'DASHBOARD' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <LayoutDashboard size={18}/> Visão Geral
+                </button>
+                <button onClick={() => setActiveTab('ENTRIES')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'ENTRIES' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <Banknote size={18}/> Lançamentos
+                </button>
+                <button onClick={() => setActiveTab('INVENTORY')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'INVENTORY' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <Package size={18}/> Estoque
+                </button>
+                <button onClick={() => setActiveTab('REPORTS')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'REPORTS' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <FileBarChart size={18}/> Relatórios
+                </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Esquerda: Diagnóstico */}
+            {/* DASHBOARD TAB */}
+            {activeTab === 'DASHBOARD' && (
                 <div className="space-y-6">
-                    <div>
-                        <h4 className="text-sm font-bold text-indigo-900 uppercase mb-3 flex items-center gap-2"><AlertTriangle size={16}/> Causas Prováveis</h4>
-                        <div className="flex flex-wrap gap-2">
-                            {result.possibleCauses.map((cause, idx) => (
-                                <span key={idx} className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-sm border border-red-100 font-medium">
-                                    {cause}
-                                </span>
-                            ))}
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <StatCard title="Receita Total" value={formatCurrency(totalRevenue)} icon={<TrendingUp size={24}/>} color="bg-green-500" />
+                        <StatCard title="Despesas Totais" value={formatCurrency(totalExpenses)} icon={<TrendingDown size={24}/>} color="bg-red-500" />
+                        <StatCard title="Saldo Líquido" value={formatCurrency(netProfit)} icon={<Wallet size={24}/>} color={netProfit >= 0 ? "bg-blue-500" : "bg-red-600"} />
+                        <StatCard title="A Pagar (Hoje)" value={formatCurrency(0)} icon={<CalendarDays size={24}/>} color="bg-orange-500" />
                     </div>
-                    <div>
-                        <h4 className="text-sm font-bold text-indigo-900 uppercase mb-3 flex items-center gap-2"><CheckSquare size={16}/> Passos para Diagnóstico</h4>
-                        <ul className="space-y-2">
-                            {result.diagnosisSteps.map((step, idx) => (
-                                <li key={idx} className="flex items-start gap-3 text-slate-700 text-sm bg-white p-2 rounded border border-slate-100">
-                                    <span className="bg-indigo-100 text-indigo-700 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold shrink-0">{idx + 1}</span>
-                                    {step}
-                                </li>
-                            ))}
-                        </ul>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card title="Fluxo de Caixa (Semestral)">
+                             <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="name" />
+                                        <YAxis />
+                                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                                        <Legend />
+                                        <Bar dataKey="receita" fill="#22c55e" name="Receitas" />
+                                        <Bar dataKey="despesa" fill="#ef4444" name="Despesas" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                             </div>
+                        </Card>
+                        <Card title="Despesas por Categoria">
+                            <div className="h-64 flex justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <RePieChart>
+                                        <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label={({name}) => name}>
+                                            {pieData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                                        <Legend />
+                                    </RePieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </Card>
                     </div>
                 </div>
+            )}
 
-                {/* Direita: Ações Recomendadas */}
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <h4 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><Wrench size={16}/> Sugestão de Reparo</h4>
-                    
-                    <div className="space-y-3 mb-4">
-                        {result.recommendedParts.map((part, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm">
+            {/* ENTRIES TAB */}
+            {activeTab === 'ENTRIES' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                         <Card title="Histórico de Despesas">
+                             <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs">
+                                        <tr>
+                                            <th className="p-3">Descrição</th>
+                                            <th className="p-3">Categoria</th>
+                                            <th className="p-3">Vencimento</th>
+                                            <th className="p-3">Status</th>
+                                            <th className="p-3 text-right">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {expenses.map(expense => (
+                                            <tr key={expense.id} className="hover:bg-slate-50">
+                                                <td className="p-3 font-medium">{expense.description}</td>
+                                                <td className="p-3 text-xs text-slate-500">{EXPENSE_CATEGORIES[expense.category]}</td>
+                                                <td className="p-3 text-slate-600">{new Date(expense.dueDate || expense.date).toLocaleDateString()}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${expense.status === 'PAID' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                                                        {expense.status === 'PAID' ? 'PAGO' : 'PENDENTE'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-right font-mono text-red-600">- {formatCurrency(expense.amount)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                             </div>
+                         </Card>
+
+                         <Card title="Últimas Receitas (OS Finalizadas)">
+                             <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs">
+                                        <tr>
+                                            <th className="p-3">OS #</th>
+                                            <th className="p-3">Cliente</th>
+                                            <th className="p-3">Data Pagto</th>
+                                            <th className="p-3">Método</th>
+                                            <th className="p-3 text-right">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {paidOrders.map(order => (
+                                            <tr key={order.id} className="hover:bg-slate-50">
+                                                <td className="p-3 font-mono">{order.id}</td>
+                                                <td className="p-3 font-medium">{order.customerName}</td>
+                                                <td className="p-3 text-slate-600">{order.paymentDate ? new Date(order.paymentDate).toLocaleDateString() : '-'}</td>
+                                                <td className="p-3 text-xs uppercase">{order.paymentMethod}</td>
+                                                <td className="p-3 text-right font-mono text-green-600">+ {formatCurrency(order.totalCost)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                             </div>
+                         </Card>
+                    </div>
+
+                    <div className="lg:col-span-1">
+                        <Card title="Nova Despesa">
+                            <div className="space-y-4">
                                 <div>
-                                    <p className="font-bold text-slate-800 text-sm">{part.name}</p>
-                                    <p className="text-xs text-slate-500">Est. {formatCurrency(part.estimatedCost)}</p>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
+                                    <input className="w-full p-2 border border-slate-300 rounded outline-none uppercase text-sm" value={newExpense.description} onChange={handleUppercaseChange(v => setNewExpense({...newExpense, description: v}))} />
                                 </div>
-                                <button onClick={() => addPart(part)} className="p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100" title="Adicionar ao Orçamento">
-                                    <PlusCircle size={18}/>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Valor (R$)</label>
+                                    <input type="number" className="w-full p-2 border border-slate-300 rounded outline-none text-sm" value={newExpense.amount || ''} onChange={e => setNewExpense({...newExpense, amount: Number(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoria</label>
+                                    <select className="w-full p-2 border border-slate-300 rounded outline-none text-sm bg-white" value={newExpense.category} onChange={e => setNewExpense({...newExpense, category: e.target.value as any})}>
+                                        {Object.entries(EXPENSE_CATEGORIES).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Vencimento</label>
+                                    <input type="date" className="w-full p-2 border border-slate-300 rounded outline-none text-sm" value={newExpense.date} onChange={e => setNewExpense({...newExpense, date: e.target.value, dueDate: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status Pagamento</label>
+                                    <select className="w-full p-2 border border-slate-300 rounded outline-none text-sm bg-white" value={newExpense.status} onChange={e => setNewExpense({...newExpense, status: e.target.value as any})}>
+                                        <option value="PENDING">PENDENTE</option>
+                                        <option value="PAID">PAGO</option>
+                                    </select>
+                                </div>
+                                <button onClick={handleAddExpense} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                                    <PlusCircle size={18}/> Registrar Despesa
                                 </button>
                             </div>
-                        ))}
-                    </div>
-
-                    {result.estimatedLaborHours > 0 && (
-                        <div className="flex justify-between items-center bg-blue-50 p-3 rounded border border-blue-100">
-                             <div>
-                                <p className="font-bold text-blue-900 text-sm">Mão de Obra Estimada</p>
-                                <p className="text-xs text-blue-600">{result.estimatedLaborHours} Horas Técnicas</p>
-                            </div>
-                            <button onClick={() => addLabor(result.estimatedLaborHours)} className="p-2 bg-white text-blue-600 rounded hover:bg-blue-50 border border-blue-200">
-                                <PlusCircle size={18}/>
-                            </button>
-                        </div>
-                    )}
-                    
-                    <div className="mt-4 pt-4 border-t border-slate-200">
-                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Manutenção Preventiva</p>
-                        <p className="text-xs text-slate-600 italic">"{result.preventiveMaintenance}"</p>
+                        </Card>
                     </div>
                 </div>
-            </div>
-        </Card>
-    );
-};
+            )}
 
-const ServiceItemsEditor = ({ order, onUpdate, readOnly = false, users }: { order: ServiceOrder, onUpdate: (o: ServiceOrder) => void, readOnly?: boolean, users: User[] }) => {
-    const [activeTab, setActiveTab] = useState<'services' | 'parts'>('services');
-    
-    // New Item States
-    const [newService, setNewService] = useState({ description: '', price: 0, notes: '', mechanicId: '' });
-    const [newPart, setNewPart] = useState({ code: '', description: '', qty: 1, unitPrice: 0 });
-
-    const calculateTotals = (items: ServiceItem[]) => {
-        const parts = items.filter(i => i.type === 'PART').reduce((acc, i) => acc + i.totalPrice, 0);
-        const labor = items.filter(i => i.type === 'LABOR').reduce((acc, i) => acc + i.totalPrice, 0);
-        return { parts, labor };
-    };
-
-    const updateOrder = (items: ServiceItem[]) => {
-        const { parts, labor } = calculateTotals(items);
-        const subTotal = parts + labor;
-        const discountVal = subTotal * ((order.discountPercentage || 0) / 100);
-        
-        onUpdate({
-            ...order,
-            items,
-            partsCost: parts,
-            laborCost: labor,
-            totalCost: subTotal - discountVal
-        });
-    };
-
-    const addService = () => {
-        if(!newService.description || newService.price < 0) return;
-        const item: ServiceItem = {
-            id: Date.now().toString(),
-            description: newService.description.toUpperCase(),
-            type: 'LABOR',
-            quantity: 1,
-            unitPrice: newService.price,
-            totalPrice: newService.price,
-            status: 'PENDING',
-            notes: newService.notes.toUpperCase(),
-            mechanicId: newService.mechanicId || order.assignedMechanicId
-        };
-        updateOrder([...(order.items || []), item]);
-        setNewService({ description: '', price: 0, notes: '', mechanicId: '' });
-    };
-
-    const addPart = () => {
-        if(!newPart.description || newPart.qty <= 0) return;
-        const item: ServiceItem = {
-            id: Date.now().toString(),
-            code: newPart.code.toUpperCase(),
-            description: newPart.description.toUpperCase(),
-            type: 'PART',
-            quantity: newPart.qty,
-            unitPrice: newPart.unitPrice,
-            totalPrice: newPart.qty * newPart.unitPrice
-        };
-        updateOrder([...(order.items || []), item]);
-        setNewPart({ code: '', description: '', qty: 1, unitPrice: 0 });
-    };
-
-    const removeItem = (id: string) => {
-        updateOrder((order.items || []).filter(i => i.id !== id));
-    };
-
-    const updateItemStatus = (id: string, newStatus: ServiceItem['status']) => {
-        const items = (order.items || []).map(i => i.id === id ? { ...i, status: newStatus } : i);
-        updateOrder(items);
-    }
-    
-    const handleDiscountChange = (percentage: number) => {
-        const subTotal = order.partsCost + order.laborCost;
-        const discountVal = subTotal * (percentage / 100);
-        onUpdate({
-            ...order,
-            discountPercentage: percentage,
-            totalCost: subTotal - discountVal
-        });
-    };
-
-    const serviceItems = (order.items || []).filter(i => i.type === 'LABOR');
-    const partItems = (order.items || []).filter(i => i.type === 'PART');
-
-    return (
-        <Card className="overflow-visible">
-            {/* Tabs Header */}
-            <div className="flex border-b border-slate-200">
-                <button 
-                    className={`flex-1 py-4 text-sm font-bold uppercase flex items-center justify-center gap-2 ${activeTab === 'services' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                    onClick={() => setActiveTab('services')}
-                >
-                    <Wrench size={18}/> Serviços e Mão de Obra ({serviceItems.length})
-                </button>
-                <button 
-                    className={`flex-1 py-4 text-sm font-bold uppercase flex items-center justify-center gap-2 ${activeTab === 'parts' ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                    onClick={() => setActiveTab('parts')}
-                >
-                    <Package size={18}/> Grade de Peças ({partItems.length})
-                </button>
-            </div>
-
-            <div className="p-6">
-                {activeTab === 'services' && (
-                    <div className="space-y-6">
-                        {/* Service List */}
-                        <div className="overflow-x-auto rounded-lg border border-slate-200">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs">
-                                    <tr>
-                                        <th className="p-3">Descrição</th>
-                                        <th className="p-3">Mecânico</th>
-                                        <th className="p-3 text-center">Status</th>
-                                        <th className="p-3 text-right">Valor</th>
-                                        {!readOnly && <th className="p-3 text-center w-16"></th>}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 bg-white">
-                                    {serviceItems.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-slate-400 italic">Nenhum serviço registrado.</td></tr>}
-                                    {serviceItems.map(item => (
-                                        <tr key={item.id} className="hover:bg-slate-50">
-                                            <td className="p-3">
-                                                <p className="font-medium text-slate-800">{item.description}</p>
-                                                {item.notes && <p className="text-xs text-slate-500 mt-1">{item.notes}</p>}
-                                            </td>
-                                            <td className="p-3 text-slate-600 text-xs">
-                                                {users.find(u => u.id === item.mechanicId)?.name || 'N/A'}
-                                            </td>
-                                            <td className="p-3 text-center">
-                                                <select 
-                                                    disabled={readOnly}
-                                                    value={item.status || 'PENDING'}
-                                                    onChange={(e) => updateItemStatus(item.id, e.target.value as any)}
-                                                    className={`text-xs font-bold px-2 py-1 rounded border outline-none ${
-                                                        item.status === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' : 
-                                                        item.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700 border-blue-200' : 
-                                                        'bg-slate-100 text-slate-600 border-slate-200'
-                                                    }`}
-                                                >
-                                                    <option value="PENDING">PENDENTE</option>
-                                                    <option value="IN_PROGRESS">EM ANDAMENTO</option>
-                                                    <option value="COMPLETED">CONCLUÍDO</option>
-                                                </select>
-                                            </td>
-                                            <td className="p-3 text-right font-mono font-bold text-slate-700">{formatCurrency(item.totalPrice)}</td>
-                                            {!readOnly && (
-                                                <td className="p-3 text-center">
-                                                    <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Add Service Form */}
-                        {!readOnly && (
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Adicionar Novo Serviço</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                                    <div className="md:col-span-5">
-                                        <input 
-                                            className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500"
-                                            placeholder="DESCRIÇÃO DO SERVIÇO"
-                                            value={newService.description}
-                                            onChange={(e) => setNewService({...newService, description: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="md:col-span-3">
-                                         <select 
-                                            className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
-                                            value={newService.mechanicId}
-                                            onChange={(e) => setNewService({...newService, mechanicId: e.target.value})}
-                                        >
-                                            <option value="">Mecânico Resp.</option>
-                                            {users.filter(u => u.role === 'MECHANIC').map(u => (
-                                                <option key={u.id} value={u.id}>{u.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <input 
-                                            type="number"
-                                            className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
-                                            placeholder="PREÇO"
-                                            value={newService.price || ''}
-                                            onChange={(e) => setNewService({...newService, price: Number(e.target.value)})}
-                                        />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <button onClick={addService} className="w-full h-full bg-blue-600 hover:bg-blue-700 text-white rounded font-bold flex items-center justify-center gap-2">
-                                            <Plus size={18}/> Adicionar
-                                        </button>
-                                    </div>
-                                    <div className="md:col-span-12">
-                                        <input 
-                                            className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500"
-                                            placeholder="Observações Técnicas (Opcional)"
-                                            value={newService.notes}
-                                            onChange={(e) => setNewService({...newService, notes: e.target.value})}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {activeTab === 'parts' && (
-                    <div className="space-y-6">
-                        {/* Parts List */}
-                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+            {/* INVENTORY TAB */}
+            {activeTab === 'INVENTORY' && (
+                <div className="space-y-6">
+                    <Card title="Gestão de Estoque" action={<button className="text-blue-600 font-bold text-sm flex items-center gap-1"><Download size={16}/> Exportar Lista</button>}>
+                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs">
                                     <tr>
                                         <th className="p-3">Código</th>
-                                        <th className="p-3">Descrição da Peça</th>
-                                        <th className="p-3 text-center">Qtd</th>
-                                        <th className="p-3 text-right">Unitário</th>
-                                        <th className="p-3 text-right">Total</th>
-                                        {!readOnly && <th className="p-3 text-center w-16"></th>}
+                                        <th className="p-3">Produto / Peça</th>
+                                        <th className="p-3">Categoria</th>
+                                        <th className="p-3 text-right">Custo</th>
+                                        <th className="p-3 text-right">Venda</th>
+                                        <th className="p-3 text-center">Estoque</th>
+                                        <th className="p-3 text-center">Status</th>
+                                        <th className="p-3 text-center">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 bg-white">
-                                    {partItems.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-slate-400 italic">Nenhuma peça registrada.</td></tr>}
-                                    {partItems.map(item => (
+                                <tbody className="divide-y divide-slate-100">
+                                    {inventory.map(item => (
                                         <tr key={item.id} className="hover:bg-slate-50">
-                                            <td className="p-3 font-mono text-xs text-slate-500">{item.code || '-'}</td>
-                                            <td className="p-3 font-medium text-slate-800">{item.description}</td>
-                                            <td className="p-3 text-center">{item.quantity}</td>
-                                            <td className="p-3 text-right font-mono text-slate-600">{formatCurrency(item.unitPrice)}</td>
-                                            <td className="p-3 text-right font-mono font-bold text-slate-700">{formatCurrency(item.totalPrice)}</td>
-                                            {!readOnly && (
-                                                <td className="p-3 text-center">
-                                                    <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
-                                                </td>
-                                            )}
+                                            <td className="p-3 font-mono text-xs">{item.code}</td>
+                                            <td className="p-3 font-medium">
+                                                {item.name}
+                                                <p className="text-[10px] text-slate-400">{item.manufacturer}</p>
+                                            </td>
+                                            <td className="p-3 text-xs">{item.category}</td>
+                                            <td className="p-3 text-right font-mono text-slate-500">{formatCurrency(item.costPrice)}</td>
+                                            <td className="p-3 text-right font-mono font-bold text-slate-700">{formatCurrency(item.sellPrice)}</td>
+                                            <td className="p-3 text-center font-bold">{item.stockQuantity}</td>
+                                            <td className="p-3 text-center">
+                                                {item.stockQuantity <= item.minStockLevel ? (
+                                                    <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded border border-red-200 font-bold">BAIXO</span>
+                                                ) : (
+                                                    <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded border border-green-200 font-bold">OK</span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit3 size={16}/></button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                         </div>
+                    </Card>
 
-                        {/* Add Part Form */}
-                        {!readOnly && (
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Lançamento de Peças</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                                    <div className="md:col-span-2">
-                                        <input 
-                                            className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500 font-mono"
-                                            placeholder="CÓDIGO"
-                                            value={newPart.code}
-                                            onChange={(e) => setNewPart({...newPart, code: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="md:col-span-5">
-                                        <input 
-                                            className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500"
-                                            placeholder="DESCRIÇÃO DA PEÇA"
-                                            value={newPart.description}
-                                            onChange={(e) => setNewPart({...newPart, description: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="md:col-span-1">
-                                        <input 
-                                            type="number"
-                                            min="1"
-                                            className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500 text-center"
-                                            placeholder="QTD"
-                                            value={newPart.qty}
-                                            onChange={(e) => setNewPart({...newPart, qty: Number(e.target.value)})}
-                                        />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <input 
-                                            type="number"
-                                            step="0.01"
-                                            className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500 text-right"
-                                            placeholder="R$ UNIT"
-                                            value={newPart.unitPrice || ''}
-                                            onChange={(e) => setNewPart({...newPart, unitPrice: Number(e.target.value)})}
-                                        />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <button onClick={addPart} className="w-full h-full bg-orange-600 hover:bg-orange-700 text-white rounded font-bold flex items-center justify-center gap-2">
-                                            <Plus size={18}/> Adicionar
-                                        </button>
-                                    </div>
+                    <Card title="Adicionar Novo Item">
+                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Código</label>
+                                <input className="w-full p-2 border border-slate-300 rounded outline-none uppercase text-sm" value={newItem.code} onChange={handleUppercaseChange(v => setNewItem({...newItem, code: v}))} />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nome do Produto</label>
+                                <input className="w-full p-2 border border-slate-300 rounded outline-none uppercase text-sm" value={newItem.name} onChange={handleUppercaseChange(v => setNewItem({...newItem, name: v}))} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoria</label>
+                                <input className="w-full p-2 border border-slate-300 rounded outline-none uppercase text-sm" value={newItem.category} onChange={handleUppercaseChange(v => setNewItem({...newItem, category: v}))} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Preço Custo</label>
+                                <input type="number" className="w-full p-2 border border-slate-300 rounded outline-none text-sm" value={newItem.costPrice || ''} onChange={e => setNewItem({...newItem, costPrice: Number(e.target.value)})} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Preço Venda</label>
+                                <input type="number" className="w-full p-2 border border-slate-300 rounded outline-none text-sm" value={newItem.sellPrice || ''} onChange={e => setNewItem({...newItem, sellPrice: Number(e.target.value)})} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Qtd Inicial</label>
+                                <input type="number" className="w-full p-2 border border-slate-300 rounded outline-none text-sm" value={newItem.stockQuantity || ''} onChange={e => setNewItem({...newItem, stockQuantity: Number(e.target.value)})} />
+                            </div>
+                            <div>
+                                <button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded flex items-center justify-center gap-2 h-[38px]">
+                                    <Plus size={18}/> Cadastrar
+                                </button>
+                            </div>
+                         </div>
+                    </Card>
+                </div>
+            )}
+
+            {/* REPORTS TAB (DRE) */}
+            {activeTab === 'REPORTS' && (
+                <div className="space-y-6">
+                    <Card title="DRE Gerencial (Demonstração do Resultado)">
+                        <div className="bg-white p-6 rounded-lg max-w-3xl mx-auto border border-slate-200 shadow-sm">
+                            <div className="text-center mb-6">
+                                <h2 className="text-xl font-bold text-slate-800">DRE - Mês Atual</h2>
+                                <p className="text-sm text-slate-500">Visão sintética do resultado operacional</p>
+                            </div>
+
+                            <div className="space-y-1 font-mono text-sm">
+                                {/* Receitas */}
+                                <div className="flex justify-between py-2 border-b border-slate-100">
+                                    <span className="text-slate-600 font-bold">(+) RECEITA BRUTA</span>
+                                    <span className="text-slate-800 font-bold">{formatCurrency(dreData.grossRevenue)}</span>
+                                </div>
+                                <div className="flex justify-between pl-4 text-xs text-slate-500">
+                                    <span>Receita de Serviços</span>
+                                    <span>{formatCurrency(dreData.laborRevenue)}</span>
+                                </div>
+                                <div className="flex justify-between pl-4 text-xs text-slate-500 pb-2">
+                                    <span>Receita de Peças</span>
+                                    <span>{formatCurrency(dreData.partsRevenue)}</span>
+                                </div>
+
+                                {/* Custos Variáveis */}
+                                <div className="flex justify-between py-2 border-b border-slate-100 text-red-600">
+                                    <span className="font-bold">(-) CUSTOS VARIÁVEIS / PEÇAS</span>
+                                    <span>{formatCurrency(dreData.variableCosts)}</span>
+                                </div>
+
+                                {/* Impostos */}
+                                <div className="flex justify-between py-2 border-b border-slate-100 text-red-600">
+                                    <span className="font-bold">(-) IMPOSTOS</span>
+                                    <span>{formatCurrency(dreData.taxes)}</span>
+                                </div>
+
+                                {/* Margem de Contribuição */}
+                                <div className="flex justify-between py-3 bg-slate-50 font-bold border-y border-slate-200">
+                                    <span className="text-slate-800">(=) MARGEM DE CONTRIBUIÇÃO</span>
+                                    <span className="text-blue-600">{formatCurrency(dreData.grossRevenue - dreData.variableCosts - dreData.taxes)}</span>
+                                </div>
+
+                                {/* Despesas Fixas */}
+                                <div className="flex justify-between py-2 border-b border-slate-100 text-red-600">
+                                    <span className="font-bold">(-) DESPESAS FIXAS / PESSOAL</span>
+                                    <span>{formatCurrency(dreData.fixedCosts)}</span>
+                                </div>
+
+                                {/* Resultado Final */}
+                                <div className="flex justify-between py-4 mt-4 border-t-2 border-slate-800 text-lg font-bold">
+                                    <span>(=) RESULTADO LÍQUIDO</span>
+                                    <span className={dreData.netOperatingProfit >= 0 ? "text-green-600" : "text-red-600"}>
+                                        {formatCurrency(dreData.netOperatingProfit)}
+                                    </span>
                                 </div>
                             </div>
-                        )}
-                    </div>
-                )}
-            </div>
-            
-            <div className="px-6 pb-6 pt-4 border-t border-slate-100 flex flex-col items-end bg-slate-50/50">
-                 <div className="w-full max-w-xs space-y-2">
-                    <div className="flex justify-between text-sm text-slate-600">
-                        <span>Total Mão de Obra</span>
-                        <span>{formatCurrency(order.laborCost)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-slate-600">
-                        <span>Total Peças</span>
-                        <span>{formatCurrency(order.partsCost)}</span>
-                    </div>
-                     {!readOnly ? (
-                        <div className="flex justify-between items-center text-sm text-green-600">
-                            <span>Desconto (%)</span>
-                            <input 
-                                type="number" 
-                                min="0" 
-                                max="100" 
-                                className="w-16 p-1 border border-green-200 rounded text-right text-sm outline-none focus:border-green-500"
-                                value={order.discountPercentage || 0}
-                                onChange={(e) => handleDiscountChange(Number(e.target.value))}
-                            />
                         </div>
-                    ) : (
-                         order.discountPercentage ? (
-                            <div className="flex justify-between text-sm text-green-600">
-                                <span>Desconto ({order.discountPercentage}%)</span>
-                                <span>- {formatCurrency((order.laborCost + order.partsCost) * (order.discountPercentage/100))}</span>
-                            </div>
-                         ) : null
-                    )}
-                    <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2">
-                        <span>TOTAL GERAL</span>
-                        <span>{formatCurrency(order.totalCost)}</span>
-                    </div>
-                 </div>
-            </div>
-        </Card>
-    );
-};
 
-const OSDetailView = ({ order, currentUser, company, onUpdate, onBack, onLog, users }: any) => {
-    const [showPayment, setShowPayment] = useState(false);
-    const [showDoc, setShowDoc] = useState<'RECEIPT' | 'QUOTE' | null>(null);
-
-    return (
-        <div className="space-y-6">
-            <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-blue-600 mb-4"><ArrowRight className="rotate-180"/> Voltar</button>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-3">OS #{order.id} <StatusBadge status={order.status} /></h2>
-                    <p className="text-slate-500 text-sm">Criado em {new Date(order.createdAt).toLocaleDateString()}</p>
+                        <div className="flex justify-end mt-6 gap-4">
+                            <button 
+                                onClick={() => {
+                                    const csvContent = "data:text/csv;charset=utf-8," 
+                                        + "CONCEITO,VALOR\n"
+                                        + `RECEITA BRUTA,${dreData.grossRevenue}\n`
+                                        + `CUSTOS VARIAVEIS,${dreData.variableCosts}\n`
+                                        + `IMPOSTOS,${dreData.taxes}\n`
+                                        + `DESPESAS FIXAS,${dreData.fixedCosts}\n`
+                                        + `LUCRO LIQUIDO,${dreData.netOperatingProfit}\n`;
+                                    downloadCSV(encodeURI(csvContent), "DRE_Relatorio.csv");
+                                }}
+                                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-bold transition-colors"
+                            >
+                                <FileSpreadsheet size={18}/> Exportar CSV
+                            </button>
+                            <button 
+                                onClick={() => window.print()}
+                                className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded hover:bg-slate-900 font-bold transition-colors"
+                            >
+                                <Printer size={18}/> Imprimir Relatório
+                            </button>
+                        </div>
+                    </Card>
                 </div>
-                <div className="flex gap-2">
-                    <button onClick={() => setShowDoc('QUOTE')} className="px-4 py-2 bg-blue-100 text-blue-800 rounded font-medium hover:bg-blue-200 transition-colors">Orçamento</button>
-                    <button onClick={() => setShowDoc('RECEIPT')} className="px-4 py-2 bg-green-100 text-green-800 rounded font-medium hover:bg-green-200 transition-colors">Recibo</button>
-                    {order.status !== OSStatus.PAID && <button onClick={() => setShowPayment(true)} className="px-4 py-2 bg-green-600 text-white rounded font-bold shadow hover:bg-green-700 transition-colors">Registrar Pagamento</button>}
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card title="Dados do Cliente" className="h-full">
-                     <div className="space-y-2">
-                        <p className="text-sm text-slate-500 uppercase font-bold text-xs">Nome</p>
-                        <p className="font-bold text-lg">{order.customerName}</p>
-                        <div className="h-px bg-slate-100 my-2"></div>
-                        <p className="text-sm text-slate-500 uppercase font-bold text-xs">Telefone</p>
-                        <p className="font-mono">{order.phone}</p>
-                     </div>
-                </Card>
-
-                <Card title="Dados do Veículo" className="h-full">
-                     <div className="space-y-2">
-                        <div className="flex justify-between">
-                             <div>
-                                <p className="text-sm text-slate-500 uppercase font-bold text-xs">Modelo/Montadora</p>
-                                <p className="font-bold">{order.vehicleManufacturer} - {order.vehicleModel}</p>
-                             </div>
-                             <div className="text-right">
-                                <p className="text-sm text-slate-500 uppercase font-bold text-xs">Placa</p>
-                                <span className="bg-slate-100 px-2 py-1 rounded font-mono border border-slate-200">{order.plate}</span>
-                             </div>
-                        </div>
-                        <div className="h-px bg-slate-100 my-2"></div>
-                        <div className="flex gap-4">
-                            <div>
-                                <p className="text-sm text-slate-500 uppercase font-bold text-xs">Ano</p>
-                                <p>{order.vehicleYear || '-'}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-500 uppercase font-bold text-xs">Cor</p>
-                                <p>{order.vehicleColor || '-'}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-500 uppercase font-bold text-xs">KM</p>
-                                <p>{order.currentMileage ? `${order.currentMileage} km` : '-'}</p>
-                            </div>
-                        </div>
-                     </div>
-                </Card>
-
-                 <Card title="Status Financeiro" className="h-full">
-                     <div className="flex flex-col h-full justify-between">
-                        <div>
-                             <p className="text-sm text-slate-500 uppercase font-bold text-xs mb-1">Situação Atual</p>
-                             <div className="text-lg text-slate-700">{order.status === OSStatus.PAID ? 'Pago / Finalizado' : 'Em Aberto'}</div>
-                        </div>
-                        <div className="mt-4">
-                            <p className="text-sm text-slate-500 uppercase font-bold text-xs">Valor Total da OS</p>
-                            <p className="text-3xl font-bold text-slate-800">{formatCurrency(order.totalCost)}</p>
-                        </div>
-                     </div>
-                </Card>
-            </div>
-            
-            {/* AI Diagnosis Section */}
-            <AIDiagnosisPanel order={order} onUpdate={onUpdate} onLog={onLog} />
-            
-            {/* Detailed Service & Parts Editor */}
-            <ServiceItemsEditor order={order} onUpdate={onUpdate} readOnly={order.status === OSStatus.PAID} users={users} />
-
-            <PaymentModal isOpen={showPayment} onClose={() => setShowPayment(false)} total={order.totalCost} onConfirm={(payment) => onUpdate({...order, status: OSStatus.PAID, paymentMethod: payment.method, paymentDate: new Date().toISOString()})} />
-            
-            {showDoc && <DocumentModal order={order} isOpen={true} onClose={() => setShowDoc(null)} company={company} onLog={onLog} mode={showDoc} />}
+            )}
         </div>
     );
 };
-
-const FinanceView = ({ expenses, orders, onAddExpense }: any) => (
-    <Card title="Financeiro">
-        <div className="p-4 text-center text-slate-500">Módulo Financeiro Simplificado</div>
-        {/* Implementation omitted for brevity but placeholder exists */}
-    </Card>
-);
 
 const AIChatView = ({ history }: any) => {
     const [messages, setMessages] = useState<any[]>([]);
@@ -1865,12 +1705,323 @@ const NewOSView = ({ onSave, onCancel }: { onSave: (os: ServiceOrder) => void, o
   );
 }
 
+const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, onLog }: { order: ServiceOrder, currentUser: User, company: CompanySettings, users: User[], onUpdate: (o: ServiceOrder) => void, onBack: () => void, onLog: (a: any, d: string, t: string) => void }) => {
+    const [newItem, setNewItem] = useState<Partial<ServiceItem>>({ description: '', type: 'LABOR', quantity: 1, unitPrice: 0 });
+    const [isDiagnosing, setIsDiagnosing] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showDocModal, setShowDocModal] = useState(false);
+    const [docMode, setDocMode] = useState<'RECEIPT' | 'QUOTE'>('RECEIPT');
+
+    const handleStatusChange = (newStatus: OSStatus) => {
+        onUpdate({ ...order, status: newStatus, updatedAt: new Date().toISOString() });
+    };
+
+    const handleRunDiagnosis = async () => {
+        setIsDiagnosing(true);
+        const result = await getMechanicDiagnosis(order.vehicleModel, order.complaint, order.currentMileage);
+        if (result) {
+            onUpdate({ ...order, aiDiagnosis: result, status: OSStatus.APPROVAL, updatedAt: new Date().toISOString() });
+            onLog('UPDATE', 'Executou Diagnóstico AI', order.id);
+        }
+        setIsDiagnosing(false);
+    };
+
+    const handleAddItem = () => {
+        if (!newItem.description || !newItem.unitPrice) return;
+        const item: ServiceItem = {
+            id: Date.now().toString(),
+            description: newItem.description!.toUpperCase(),
+            type: newItem.type || 'LABOR',
+            quantity: Number(newItem.quantity),
+            unitPrice: Number(newItem.unitPrice),
+            totalPrice: Number(newItem.quantity) * Number(newItem.unitPrice),
+            status: 'PENDING'
+        };
+
+        const updatedItems = [...(order.items || []), item];
+        recalculateTotals(updatedItems);
+        setNewItem({ description: '', type: 'LABOR', quantity: 1, unitPrice: 0 });
+    };
+
+    const handleRemoveItem = (itemId: string) => {
+        const updatedItems = (order.items || []).filter(i => i.id !== itemId);
+        recalculateTotals(updatedItems);
+    };
+
+    const recalculateTotals = (items: ServiceItem[]) => {
+        const parts = items.filter(i => i.type === 'PART').reduce((acc, i) => acc + i.totalPrice, 0);
+        const labor = items.filter(i => i.type === 'LABOR').reduce((acc, i) => acc + i.totalPrice, 0);
+        const total = parts + labor; // Discount logic could be added here
+        
+        onUpdate({
+            ...order,
+            items: items,
+            partsCost: parts,
+            laborCost: labor,
+            totalCost: total, // simplified, should handle discount
+            updatedAt: new Date().toISOString()
+        });
+    };
+
+    const handlePayment = (payment: PaymentInput) => {
+        onUpdate({
+            ...order,
+            status: OSStatus.PAID,
+            paymentMethod: payment.method,
+            paymentDate: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+        onLog('FINANCE', `Recebeu Pagamento: ${formatCurrency(payment.amount)}`, order.id);
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+             {/* Header */}
+             <div className="flex items-center justify-between">
+                 <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors">
+                     <ArrowRight className="rotate-180" size={20}/> Voltar
+                 </button>
+                 <div className="flex items-center gap-3">
+                     <StatusBadge status={order.status} />
+                     {order.status !== OSStatus.PAID && order.status !== OSStatus.COMPLETED && (
+                         <select 
+                             className="bg-white border border-slate-300 text-sm rounded-lg p-2 outline-none"
+                             value={order.status}
+                             onChange={(e) => handleStatusChange(e.target.value as OSStatus)}
+                         >
+                             {Object.values(OSStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                         </select>
+                     )}
+                     <button onClick={() => { setDocMode('QUOTE'); setShowDocModal(true); }} className="p-2 bg-slate-200 rounded text-slate-600 hover:bg-slate-300" title="Gerar Orçamento"><FileText size={20}/></button>
+                     <button onClick={() => { setDocMode('RECEIPT'); setShowDocModal(true); }} className="p-2 bg-slate-200 rounded text-slate-600 hover:bg-slate-300" title="Gerar Recibo"><Printer size={20}/></button>
+                 </div>
+             </div>
+
+             {/* Main Content */}
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 {/* Left Column: Details & AI */}
+                 <div className="lg:col-span-2 space-y-6">
+                     <Card title={`OS #${order.id} - ${order.vehicleModel}`}>
+                         <div className="grid grid-cols-2 gap-4 mb-6">
+                             <div>
+                                 <label className="text-xs text-slate-500 font-bold uppercase">Cliente</label>
+                                 <p className="font-bold">{order.customerName}</p>
+                                 <p className="text-sm text-slate-600">{order.phone}</p>
+                             </div>
+                             <div>
+                                 <label className="text-xs text-slate-500 font-bold uppercase">Veículo</label>
+                                 <p className="font-bold">{order.vehicleModel} ({order.vehicleYear})</p>
+                                 <p className="text-sm text-slate-600 font-mono bg-slate-100 inline-block px-2 rounded border border-slate-200">{order.plate}</p>
+                             </div>
+                             <div className="col-span-2">
+                                 <label className="text-xs text-slate-500 font-bold uppercase">Reclamação</label>
+                                 <p className="bg-red-50 text-red-800 p-3 rounded border border-red-100 text-sm whitespace-pre-wrap">{order.complaint}</p>
+                             </div>
+                         </div>
+                         
+                         {/* AI Section */}
+                         <div className="border-t border-slate-100 pt-4">
+                             <div className="flex justify-between items-center mb-4">
+                                 <h4 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={18} className="text-purple-600"/> Diagnóstico IA</h4>
+                                 {!order.aiDiagnosis && (
+                                     <button 
+                                         onClick={handleRunDiagnosis} 
+                                         disabled={isDiagnosing}
+                                         className="text-xs bg-purple-600 text-white px-3 py-1 rounded-full font-bold hover:bg-purple-700 flex items-center gap-1"
+                                     >
+                                         {isDiagnosing ? <Loader className="animate-spin" size={12}/> : <Bot size={12}/>} Gerar Diagnóstico
+                                     </button>
+                                 )}
+                             </div>
+                             
+                             {order.aiDiagnosis ? (
+                                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 space-y-4">
+                                     <div>
+                                         <p className="text-xs font-bold text-purple-800 uppercase mb-1">Causas Prováveis</p>
+                                         <ul className="list-disc list-inside text-sm text-slate-700">
+                                             {order.aiDiagnosis.possibleCauses.map((c, i) => <li key={i}>{c}</li>)}
+                                         </ul>
+                                     </div>
+                                     <div>
+                                         <p className="text-xs font-bold text-purple-800 uppercase mb-1">Passos Recomendados</p>
+                                         <div className="flex flex-wrap gap-2">
+                                             {order.aiDiagnosis.diagnosisSteps.map((s, i) => (
+                                                 <span key={i} className="bg-white border border-purple-200 px-2 py-1 rounded text-xs text-purple-900">{s}</span>
+                                             ))}
+                                         </div>
+                                     </div>
+                                 </div>
+                             ) : (
+                                 <div className="text-center py-8 text-slate-400 text-sm bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                                     Nenhum diagnóstico gerado ainda.
+                                 </div>
+                             )}
+                         </div>
+                     </Card>
+
+                     <Card title="Serviços e Peças">
+                         <div className="overflow-x-auto mb-6">
+                             <table className="w-full text-sm text-left">
+                                 <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase">
+                                     <tr>
+                                         <th className="p-3">Tipo</th>
+                                         <th className="p-3">Descrição</th>
+                                         <th className="p-3 text-center">Qtd</th>
+                                         <th className="p-3 text-right">Unitário</th>
+                                         <th className="p-3 text-right">Total</th>
+                                         <th className="p-3 text-center"></th>
+                                     </tr>
+                                 </thead>
+                                 <tbody className="divide-y divide-slate-100">
+                                     {(order.items || []).map(item => (
+                                         <tr key={item.id}>
+                                             <td className="p-3">
+                                                 <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${item.type === 'PART' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                                                     {item.type === 'PART' ? 'PEÇA' : 'SERV'}
+                                                 </span>
+                                             </td>
+                                             <td className="p-3 font-medium uppercase">{item.description}</td>
+                                             <td className="p-3 text-center">{item.quantity}</td>
+                                             <td className="p-3 text-right text-slate-500">{formatCurrency(item.unitPrice)}</td>
+                                             <td className="p-3 text-right font-bold">{formatCurrency(item.totalPrice)}</td>
+                                             <td className="p-3 text-center">
+                                                 {order.status !== OSStatus.PAID && (
+                                                     <button onClick={() => handleRemoveItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                                                 )}
+                                             </td>
+                                         </tr>
+                                     ))}
+                                 </tbody>
+                             </table>
+                             {(order.items || []).length === 0 && <div className="text-center text-slate-400 py-4 text-sm">Nenhum item adicionado.</div>}
+                         </div>
+
+                         {order.status !== OSStatus.PAID && (
+                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                 <div className="md:col-span-2">
+                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo</label>
+                                     <select 
+                                         className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                                         value={newItem.type} 
+                                         onChange={e => setNewItem({...newItem, type: e.target.value as any})}
+                                     >
+                                         <option value="LABOR">Serviço</option>
+                                         <option value="PART">Peça</option>
+                                     </select>
+                                 </div>
+                                 <div className="md:col-span-5">
+                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Descrição</label>
+                                     <input 
+                                         className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500"
+                                         value={newItem.description} 
+                                         onChange={handleUppercaseChange(v => setNewItem({...newItem, description: v}))}
+                                         placeholder="EX: TROCA DE ÓLEO"
+                                     />
+                                 </div>
+                                 <div className="md:col-span-1">
+                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Qtd</label>
+                                     <input 
+                                         type="number"
+                                         className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
+                                         value={newItem.quantity} 
+                                         onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})}
+                                     />
+                                 </div>
+                                 <div className="md:col-span-2">
+                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Valor Unit.</label>
+                                     <input 
+                                         type="number"
+                                         className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
+                                         value={newItem.unitPrice || ''} 
+                                         onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})}
+                                         placeholder="0.00"
+                                     />
+                                 </div>
+                                 <div className="md:col-span-2">
+                                     <button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-1">
+                                         <Plus size={16}/> Adicionar
+                                     </button>
+                                 </div>
+                             </div>
+                         )}
+                     </Card>
+                 </div>
+
+                 {/* Right Column: Summary & Actions */}
+                 <div className="space-y-6">
+                     <Card title="Resumo Financeiro">
+                         <div className="space-y-3">
+                             <div className="flex justify-between text-sm text-slate-600">
+                                 <span>Serviços</span>
+                                 <span>{formatCurrency(order.laborCost)}</span>
+                             </div>
+                             <div className="flex justify-between text-sm text-slate-600">
+                                 <span>Peças</span>
+                                 <span>{formatCurrency(order.partsCost)}</span>
+                             </div>
+                             <div className="pt-3 border-t border-slate-200 flex justify-between text-lg font-bold text-slate-800">
+                                 <span>Total</span>
+                                 <span>{formatCurrency(order.totalCost)}</span>
+                             </div>
+
+                             {order.status === OSStatus.PAID ? (
+                                 <div className="bg-green-100 border border-green-200 text-green-800 p-3 rounded-lg text-center font-bold text-sm mt-4">
+                                     <CheckCircle className="inline-block mr-2 mb-1" size={16}/> 
+                                     PAGO ({order.paymentMethod})
+                                 </div>
+                             ) : (
+                                 <button 
+                                     onClick={() => setShowPaymentModal(true)} 
+                                     disabled={order.totalCost === 0}
+                                     className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg mt-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                 >
+                                     <DollarSign size={20}/> Registrar Pagamento
+                                 </button>
+                             )}
+                         </div>
+                     </Card>
+
+                     <Card title="Mecânico Responsável">
+                         <select 
+                             className="w-full p-2 border border-slate-300 rounded bg-white outline-none"
+                             value={order.assignedMechanicId || ''}
+                             onChange={(e) => onUpdate({...order, assignedMechanicId: e.target.value})}
+                         >
+                             <option value="">Selecione...</option>
+                             {users.filter(u => u.role === 'MECHANIC').map(u => (
+                                 <option key={u.id} value={u.id}>{u.name}</option>
+                             ))}
+                         </select>
+                     </Card>
+                 </div>
+             </div>
+
+             <PaymentModal 
+                isOpen={showPaymentModal}
+                onClose={() => setShowPaymentModal(false)}
+                total={order.totalCost}
+                onConfirm={handlePayment}
+             />
+
+             <DocumentModal 
+                 isOpen={showDocModal}
+                 onClose={() => setShowDocModal(false)}
+                 order={order}
+                 company={company}
+                 onLog={onLog}
+                 mode={docMode}
+             />
+        </div>
+    );
+};
+
 const App = () => {
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
   const [orders, setOrders] = useState<ServiceOrder[]>(INITIAL_DATA);
   const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
+  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [logs, setLogs] = useState<AuditLogEntry[]>(INITIAL_LOGS);
   const [selectedOSId, setSelectedOSId] = useState<string | null>(null);
 
@@ -1911,7 +2062,16 @@ const App = () => {
                 onBack={() => setCurrentView('OS_LIST')}
                 onLog={addLog}
             />;
-          case 'FINANCE': return <FinanceView expenses={expenses} orders={orders} onAddExpense={(e: Expense) => { setExpenses([e, ...expenses]); addLog('FINANCE', `Despesa: ${e.description}`); }} />;
+          case 'FINANCE': return (
+            <FinanceView 
+                expenses={expenses} 
+                orders={orders} 
+                inventory={inventory}
+                onAddExpense={(e: Expense) => { setExpenses([e, ...expenses]); addLog('FINANCE', `Despesa: ${e.description}`); }} 
+                onUpdateInventory={(item: InventoryItem) => { setInventory(inventory.map(i => i.id === item.id ? item : i)); addLog('UPDATE', `Atualizou Estoque: ${item.code}`); }}
+                onAddInventory={(item: InventoryItem) => { setInventory([...inventory, item]); addLog('UPDATE', `Novo Item Estoque: ${item.code}`); }}
+            />
+          );
           case 'AI_CHAT': return <AIChatView history={[]} />;
           case 'SETTINGS': return <SettingsView company={company} onUpdate={(c: CompanySettings) => { setCompany(c); addLog('UPDATE', 'Atualizou Configurações da Empresa'); }} />;
           default: return <div className="p-8">Em construção...</div>;
@@ -1934,7 +2094,7 @@ const App = () => {
                 <NavItem icon={<ClipboardList size={20}/>} label="Ordens de Serviço" active={currentView === 'OS_LIST'} onClick={() => setCurrentView('OS_LIST')} />
                 <NavItem icon={<PlusCircle size={20}/>} label="Nova OS" active={currentView === 'NEW_OS'} onClick={() => setCurrentView('NEW_OS')} />
                 <div className="pt-4 pb-2 text-xs font-bold text-slate-600 uppercase px-4">Gestão</div>
-                <NavItem icon={<DollarSign size={20}/>} label="Financeiro" active={currentView === 'FINANCE'} onClick={() => setCurrentView('FINANCE')} />
+                <NavItem icon={<DollarSign size={20}/>} label="Financeiro & Estoque" active={currentView === 'FINANCE'} onClick={() => setCurrentView('FINANCE')} />
                 <NavItem icon={<Users size={20}/>} label="Equipe" active={currentView === 'TEAM'} onClick={() => setCurrentView('TEAM')} />
                 <div className="pt-4 pb-2 text-xs font-bold text-slate-600 uppercase px-4">Ferramentas</div>
                 <NavItem icon={<Bot size={20}/>} label="Mecânico Virtual (IA)" active={currentView === 'AI_CHAT'} onClick={() => setCurrentView('AI_CHAT')} />

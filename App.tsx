@@ -2256,7 +2256,8 @@ const OSDetailView = ({
     onUpdate, 
     onBack, 
     onLog,
-    onDeductStock
+    onDeductStock,
+    onReturnStock
 }: { 
     order: ServiceOrder, 
     currentUser: User, 
@@ -2266,7 +2267,8 @@ const OSDetailView = ({
     onUpdate: (o: ServiceOrder) => void, 
     onBack: () => void, 
     onLog: (a: any, d: string, t: string) => void,
-    onDeductStock: (itemId: string, qty: number) => void
+    onDeductStock: (itemId: string, qty: number) => void,
+    onReturnStock: (itemId: string, qty: number) => void
 }) => {
     const [newItem, setNewItem] = useState<Partial<ServiceItem>>({ description: '', type: 'LABOR', quantity: 1, unitPrice: 0 });
     const [isDiagnosing, setIsDiagnosing] = useState(false);
@@ -2347,22 +2349,52 @@ const OSDetailView = ({
     };
 
     const handleRemoveItem = (itemId: string) => {
+        const itemToRemove = (order.items || []).find(i => i.id === itemId);
+        
+        // Logic to return stock if it was an inventory item
+        if (itemToRemove && itemToRemove.type === 'PART' && itemToRemove.inventoryItemId) {
+            onReturnStock(itemToRemove.inventoryItemId, itemToRemove.quantity);
+        }
+
         const updatedItems = (order.items || []).filter(i => i.id !== itemId);
         recalculateTotals(updatedItems);
-        // Note: Currently not returning stock on remove to keep simplicity, but in production would need reverse logic
     };
 
     const recalculateTotals = (items: ServiceItem[]) => {
         const parts = items.filter(i => i.type === 'PART').reduce((acc, i) => acc + i.totalPrice, 0);
         const labor = items.filter(i => i.type === 'LABOR').reduce((acc, i) => acc + i.totalPrice, 0);
-        const total = parts + labor; // Discount logic could be added here
+        const subTotal = parts + labor;
+        
+        // Mantém o desconto atual, recalculando o valor absoluto
+        const currentDiscount = order.discountPercentage || 0;
+        const discountValue = subTotal * (currentDiscount / 100);
         
         onUpdate({
             ...order,
             items: items,
             partsCost: parts,
             laborCost: labor,
-            totalCost: total, // simplified, should handle discount
+            totalCost: subTotal - discountValue,
+            updatedAt: new Date().toISOString()
+        });
+    };
+
+    const handleDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val) || val < 0) val = 0;
+
+        if (val > 10) {
+            alert("Atenção: O desconto máximo permitido é de 10%.");
+            val = 10;
+        }
+
+        const subTotal = order.partsCost + order.laborCost;
+        const discountValue = subTotal * (val / 100);
+        
+        onUpdate({
+            ...order,
+            discountPercentage: val,
+            totalCost: subTotal - discountValue,
             updatedAt: new Date().toISOString()
         });
     };
@@ -2609,7 +2641,33 @@ const OSDetailView = ({
                                  <span>Peças</span>
                                  <span>{formatCurrency(order.partsCost)}</span>
                              </div>
-                             <div className="pt-3 border-t border-slate-200 flex justify-between text-lg font-bold text-slate-800">
+
+                             <div className="py-2 border-t border-slate-100">
+                                <div className="flex justify-between items-center text-sm text-slate-600">
+                                    <span className="flex items-center gap-1">Desconto (%) <span className="text-[10px] text-slate-400">(Max 10%)</span></span>
+                                    <div className="w-20">
+                                        <input 
+                                            type="number"
+                                            min="0"
+                                            max="10"
+                                            step="0.5"
+                                            disabled={order.status === OSStatus.PAID}
+                                            className="w-full p-1 border border-slate-300 rounded text-right outline-none focus:border-blue-500 font-mono text-slate-700 disabled:bg-slate-100"
+                                            value={order.discountPercentage || ''}
+                                            onChange={handleDiscountChange}
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+                                {(order.discountPercentage || 0) > 0 && (
+                                    <div className="flex justify-between text-xs text-green-600 font-medium pt-1">
+                                        <span>Valor do Desconto</span>
+                                        <span>- {formatCurrency((order.partsCost + order.laborCost) * ((order.discountPercentage || 0) / 100))}</span>
+                                    </div>
+                                )}
+                             </div>
+
+                             <div className="pt-2 border-t border-slate-200 flex justify-between text-lg font-bold text-slate-800">
                                  <span>Total</span>
                                  <span>{formatCurrency(order.totalCost)}</span>
                              </div>
@@ -2666,26 +2724,26 @@ const OSDetailView = ({
 };
 
 const App = () => {
-  // Persistence using usePersistentState hook
-  const [company, setCompany] = usePersistentState<CompanySettings | null>('company_settings', null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // Login is usually ephemeral for session
-  const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
+  // State
+  const [companySettings, setCompanySettings] = usePersistentState<CompanySettings | null>('osmech_company', null);
+  const [users, setUsers] = usePersistentState<User[]>('osmech_users', INITIAL_USERS);
+  const [orders, setOrders] = usePersistentState<ServiceOrder[]>('osmech_orders', INITIAL_DATA);
+  const [expenses, setExpenses] = usePersistentState<Expense[]>('osmech_expenses', INITIAL_EXPENSES);
+  const [inventory, setInventory] = usePersistentState<InventoryItem[]>('osmech_inventory', INITIAL_INVENTORY);
+  const [logs, setLogs] = usePersistentState<AuditLogEntry[]>('osmech_logs', INITIAL_LOGS);
   
-  const [orders, setOrders] = usePersistentState<ServiceOrder[]>('service_orders', INITIAL_DATA);
-  const [expenses, setExpenses] = usePersistentState<Expense[]>('expenses', INITIAL_EXPENSES);
-  const [inventory, setInventory] = usePersistentState<InventoryItem[]>('inventory', INITIAL_INVENTORY);
-  const [users, setUsers] = usePersistentState<User[]>('users', INITIAL_USERS);
-  const [logs, setLogs] = usePersistentState<AuditLogEntry[]>('audit_logs', INITIAL_LOGS);
-  
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<ViewState>('LOGIN');
   const [selectedOSId, setSelectedOSId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // Helper for logging
   const addLog = (action: AuditLogEntry['action'], details: string, targetId?: string) => {
-      if(!currentUser) return;
       const newLog: AuditLogEntry = {
           id: Date.now().toString(),
           action,
-          userId: currentUser.id,
-          userName: currentUser.name,
+          userId: currentUser?.id || 'system',
+          userName: currentUser?.name || 'System',
           timestamp: new Date().toISOString(),
           details,
           targetId
@@ -2693,124 +2751,188 @@ const App = () => {
       setLogs(prev => [newLog, ...prev]);
   };
 
-  if (!company) return <SetupView onSave={setCompany} />;
-  if (!currentUser) return <LoginView users={users} onLogin={setCurrentUser} />;
+  // Auth
+  const handleLogin = (user: User) => {
+      setCurrentUser(user);
+      setCurrentView('DASHBOARD');
+      addLog('LOGIN', `Usuário ${user.name} fez login`);
+  };
+
+  const handleLogout = () => {
+      addLog('LOGIN', `Usuário ${currentUser?.name} saiu`);
+      setCurrentUser(null);
+      setCurrentView('LOGIN');
+  };
+
+  // Inventory Actions
+  const handleDeductStock = (itemId: string, qty: number) => {
+      setInventory(prev => prev.map(i => {
+          if (i.id === itemId) {
+              return { ...i, stockQuantity: i.stockQuantity - qty };
+          }
+          return i;
+      }));
+  };
+
+  const handleReturnStock = (itemId: string, qty: number) => {
+       setInventory(prev => prev.map(i => {
+          if (i.id === itemId) {
+              return { ...i, stockQuantity: i.stockQuantity + qty };
+          }
+          return i;
+      }));
+  };
+
+  // View Logic
+  if (!companySettings) {
+      return <SetupView onSave={(s) => setCompanySettings(s)} />;
+  }
+
+  if (!currentUser) {
+      return <LoginView users={users} onLogin={handleLogin} />;
+  }
 
   const renderContent = () => {
-      switch(currentView) {
-          case 'DASHBOARD': return <DashboardView orders={orders} expenses={expenses} logs={logs} onViewOS={(id: string) => { setSelectedOSId(id); setCurrentView('OS_DETAILS'); }} onNewOS={() => setCurrentView('NEW_OS')} />;
-          case 'OS_LIST': return <OSListView orders={orders} onViewOS={(id: string) => { setSelectedOSId(id); setCurrentView('OS_DETAILS'); }} />;
-          case 'NEW_OS': return <NewOSView onSave={(os: ServiceOrder) => { setOrders([os, ...orders]); addLog('CREATE', `Criou OS ${os.id}`, os.id); setCurrentView('OS_LIST'); }} onCancel={() => setCurrentView('DASHBOARD')} />;
-          case 'OS_DETAILS': 
-            const os = orders.find(o => o.id === selectedOSId);
-            if(!os) return <div>OS não encontrada</div>;
-            return <OSDetailView 
-                order={os} 
-                currentUser={currentUser}
-                company={company}
-                users={users}
-                inventory={inventory} // Pass inventory
-                onUpdate={(updated: ServiceOrder) => {
-                    setOrders(orders.map(o => o.id === updated.id ? updated : o));
-                    addLog('UPDATE', `Atualizou OS ${updated.id}`, updated.id);
-                }}
-                onBack={() => setCurrentView('OS_LIST')}
-                onLog={addLog}
-                onDeductStock={(itemId, qty) => {
-                    setInventory(inv => inv.map(i => i.id === itemId ? {...i, stockQuantity: i.stockQuantity - qty} : i));
-                    addLog('UPDATE', `Baixa Estoque (OS ${os.id})`, itemId);
-                }}
-            />;
-          case 'FINANCE': return (
-            <FinanceView 
-                expenses={expenses} 
-                orders={orders} 
-                inventory={inventory}
-                onAddExpense={(e: Expense) => { setExpenses([e, ...expenses]); addLog('FINANCE', `Despesa: ${e.description}`); }} 
-                onUpdateInventory={(item: InventoryItem) => { setInventory(inventory.map(i => i.id === item.id ? item : i)); addLog('UPDATE', `Atualizou Estoque: ${item.code}`); }}
-                onAddInventory={(item: InventoryItem) => { setInventory([...inventory, item]); addLog('UPDATE', `Novo Item Estoque: ${item.code}`); }}
-            />
-          );
-          case 'TEAM': return (
-              <TeamView 
+      switch (currentView) {
+          case 'DASHBOARD':
+              return <DashboardView 
+                  orders={orders} 
+                  expenses={expenses} 
+                  logs={logs} 
+                  onViewOS={(id) => { setSelectedOSId(id); setCurrentView('OS_DETAILS'); }} 
+                  onNewOS={() => setCurrentView('NEW_OS')}
+              />;
+          case 'OS_LIST':
+              return <OSListView 
+                  orders={orders} 
+                  onViewOS={(id) => { setSelectedOSId(id); setCurrentView('OS_DETAILS'); }} 
+              />;
+          case 'NEW_OS':
+              return <NewOSView 
+                  onCancel={() => setCurrentView('DASHBOARD')}
+                  onSave={(newOS) => {
+                      setOrders([newOS, ...orders]);
+                      addLog('CREATE', `Criou OS #${newOS.id}`, newOS.id);
+                      setCurrentView('OS_LIST');
+                  }}
+              />;
+          case 'OS_DETAILS':
+              const os = orders.find(o => o.id === selectedOSId);
+              if (!os) return <div>OS não encontrada</div>;
+              return <OSDetailView 
+                  order={os} 
+                  currentUser={currentUser}
+                  company={companySettings}
+                  users={users}
+                  inventory={inventory}
+                  onBack={() => setCurrentView('OS_LIST')}
+                  onUpdate={(updatedOS) => {
+                      setOrders(orders.map(o => o.id === updatedOS.id ? updatedOS : o));
+                  }}
+                  onLog={addLog}
+                  onDeductStock={handleDeductStock}
+                  onReturnStock={handleReturnStock}
+              />;
+          case 'FINANCE':
+              if (currentUser.role !== 'ADMIN') return <div className="p-8 text-center text-red-500">Acesso Negado</div>;
+              return <FinanceView 
+                  expenses={expenses} 
+                  orders={orders} 
+                  inventory={inventory}
+                  onAddExpense={(e) => {
+                      setExpenses([e, ...expenses]);
+                      addLog('FINANCE', `Registrou despesa: ${e.description}`);
+                  }}
+                  onUpdateInventory={(item) => setInventory(inventory.map(i => i.id === item.id ? item : i))}
+                  onAddInventory={(item) => setInventory([...inventory, item])}
+              />;
+          case 'TEAM':
+              if (currentUser.role !== 'ADMIN') return <div className="p-8 text-center text-red-500">Acesso Negado</div>;
+              return <TeamView 
                   users={users} 
                   orders={orders} 
-                  onUpdateUsers={(updatedUsers: User[]) => { setUsers(updatedUsers); addLog('UPDATE', 'Atualizou Cadastro de Equipe'); }} 
-              />
-          );
-          case 'AI_CHAT': return <AIChatView history={[]} />;
-          case 'SETTINGS': return <SettingsView company={company} onUpdate={(c: CompanySettings) => { setCompany(c); addLog('UPDATE', 'Atualizou Configurações da Empresa'); }} />;
-          default: return <div className="p-8">Em construção...</div>;
+                  onUpdateUsers={(u) => setUsers(u)} 
+              />;
+          case 'AI_CHAT':
+              return <AIChatView />;
+          case 'SETTINGS':
+              if (currentUser.role !== 'ADMIN') return <div className="p-8 text-center text-red-500">Acesso Negado</div>;
+              return <SettingsView 
+                  company={companySettings} 
+                  onUpdate={(c) => {
+                      setCompanySettings(c);
+                      addLog('UPDATE', 'Atualizou configurações da empresa');
+                  }} 
+              />;
+          default:
+              return <DashboardView orders={orders} expenses={expenses} logs={logs} onViewOS={(id) => { setSelectedOSId(id); setCurrentView('OS_DETAILS'); }} onNewOS={() => setCurrentView('NEW_OS')}/>;
       }
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
-        <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-20">
-            <div className="p-6 border-b border-slate-800">
-                <div className="flex items-center gap-3 text-white mb-1">
-                    {company.logo ? (
-                        <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center overflow-hidden">
-                             <img src={company.logo} alt="Logo" className="max-h-full max-w-full object-contain" />
-                        </div>
-                    ) : (
+    <div className="flex h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
+        {/* Sidebar */}
+        <div className={`bg-slate-900 text-white flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+            <div className="p-4 flex items-center justify-between border-b border-slate-800">
+                {sidebarOpen && (
+                    <div className="flex items-center gap-2 animate-fade-in">
                         <div className="bg-blue-600 p-2 rounded-lg"><Wrench size={20}/></div>
-                    )}
-                    <span className="font-bold text-lg tracking-tight">OSMech</span>
-                </div>
-                <p className="text-xs text-slate-500 uppercase truncate mt-2">{company.name}</p>
-            </div>
-
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-                <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active={currentView === 'DASHBOARD'} onClick={() => setCurrentView('DASHBOARD')} />
-                <NavItem icon={<ClipboardList size={20}/>} label="Ordens de Serviço" active={currentView === 'OS_LIST'} onClick={() => setCurrentView('OS_LIST')} />
-                <NavItem icon={<PlusCircle size={20}/>} label="Nova OS" active={currentView === 'NEW_OS'} onClick={() => setCurrentView('NEW_OS')} />
-                <div className="pt-4 pb-2 text-xs font-bold text-slate-600 uppercase px-4">Gestão</div>
-                <NavItem icon={<DollarSign size={20}/>} label="Financeiro & Estoque" active={currentView === 'FINANCE'} onClick={() => setCurrentView('FINANCE')} />
-                <NavItem icon={<Users size={20}/>} label="Equipe" active={currentView === 'TEAM'} onClick={() => setCurrentView('TEAM')} />
-                <div className="pt-4 pb-2 text-xs font-bold text-slate-600 uppercase px-4">Ferramentas</div>
-                <NavItem icon={<Bot size={20}/>} label="Mecânico Virtual (IA)" active={currentView === 'AI_CHAT'} onClick={() => setCurrentView('AI_CHAT')} />
-                <NavItem icon={<Settings size={20}/>} label="Configurações" active={currentView === 'SETTINGS'} onClick={() => setCurrentView('SETTINGS')} />
-            </nav>
-
-            <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-                <button onClick={() => setCurrentUser(null)} className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-white">
-                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white">
-                        {currentUser.avatar}
+                        <span className="font-bold text-lg tracking-tight">OSMech</span>
                     </div>
-                    <div className="flex-1 text-left overflow-hidden">
-                        <p className="text-sm font-medium truncate text-white">{currentUser.name}</p>
-                        <p className="text-[10px] truncate">{currentUser.role === 'ADMIN' ? 'Administrador' : 'Mecânico'}</p>
-                    </div>
-                    <LogOut size={16} />
+                )}
+                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
+                    {sidebarOpen ? <ChevronLeft size={20}/> : <Menu size={20}/>}
                 </button>
             </div>
-        </aside>
-
-        <main className="flex-1 overflow-hidden relative flex flex-col">
-            <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10">
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    {currentView === 'DASHBOARD' && <><LayoutDashboard size={24} className="text-blue-600"/> Visão Geral</>}
-                    {currentView === 'OS_LIST' && <><ClipboardList size={24} className="text-blue-600"/> Ordens de Serviço</>}
-                    {currentView === 'NEW_OS' && <><PlusCircle size={24} className="text-blue-600"/> Nova Ordem de Serviço</>}
-                    {currentView === 'OS_DETAILS' && <><FileText size={24} className="text-blue-600"/> Detalhes da OS</>}
-                    {currentView === 'FINANCE' && <><DollarSign size={24} className="text-blue-600"/> Gestão Financeira</>}
-                    {currentView === 'TEAM' && <><Users size={24} className="text-blue-600"/> Gestão de Equipe</>}
-                    {currentView === 'AI_CHAT' && <><Bot size={24} className="text-blue-600"/> Mecânico Virtual IA</>}
-                    {currentView === 'SETTINGS' && <><Settings size={24} className="text-blue-600"/> Configurações da Oficina</>}
-                </h2>
-                <div className="flex items-center gap-4">
-                     <span className="text-sm text-slate-500">{new Date().toLocaleDateString()}</span>
-                     <button className="p-2 text-slate-400 hover:text-slate-600 relative">
-                        <Bell size={20} />
-                        <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-                     </button>
-                </div>
-            </header>
-            <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-                {renderContent()}
+            
+            <div className="flex-1 py-6 px-3 overflow-y-auto space-y-2">
+                <NavItem icon={<LayoutDashboard size={20}/>} label={sidebarOpen ? "Dashboard" : ""} active={currentView === 'DASHBOARD'} onClick={() => setCurrentView('DASHBOARD')} />
+                <NavItem icon={<ClipboardList size={20}/>} label={sidebarOpen ? "Ordens de Serviço" : ""} active={currentView === 'OS_LIST' || currentView === 'OS_DETAILS' || currentView === 'NEW_OS'} onClick={() => setCurrentView('OS_LIST')} />
+                
+                {currentUser.role === 'ADMIN' && (
+                    <>
+                        <NavItem icon={<DollarSign size={20}/>} label={sidebarOpen ? "Financeiro & Estoque" : ""} active={currentView === 'FINANCE'} onClick={() => setCurrentView('FINANCE')} />
+                        <NavItem icon={<Users size={20}/>} label={sidebarOpen ? "Equipe & Comissões" : ""} active={currentView === 'TEAM'} onClick={() => setCurrentView('TEAM')} />
+                    </>
+                )}
+                
+                <NavItem icon={<Bot size={20}/>} label={sidebarOpen ? "Mecânico Virtual (IA)" : ""} active={currentView === 'AI_CHAT'} onClick={() => setCurrentView('AI_CHAT')} />
+                
+                {currentUser.role === 'ADMIN' && (
+                     <NavItem icon={<Settings size={20}/>} label={sidebarOpen ? "Configurações" : ""} active={currentView === 'SETTINGS'} onClick={() => setCurrentView('SETTINGS')} />
+                )}
             </div>
-        </main>
+
+            <div className="p-4 border-t border-slate-800">
+                <div className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center'}`}>
+                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold">
+                        {currentUser.avatar}
+                    </div>
+                    {sidebarOpen && (
+                        <div className="overflow-hidden">
+                            <p className="font-bold text-sm truncate">{currentUser.name}</p>
+                            <p className="text-xs text-slate-400 truncate">{currentUser.role === 'ADMIN' ? 'Administrador' : 'Mecânico'}</p>
+                        </div>
+                    )}
+                </div>
+                {sidebarOpen && (
+                    <button onClick={handleLogout} className="mt-4 w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-slate-700 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 transition-all text-sm font-medium text-slate-400">
+                        <LogOut size={16}/> Sair do Sistema
+                    </button>
+                )}
+            </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            {/* Top Bar Mobile Toggle (optional) */}
+            
+            <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
+                <div className="max-w-7xl mx-auto animate-fade-in">
+                    {renderContent()}
+                </div>
+            </main>
+        </div>
     </div>
   );
 };

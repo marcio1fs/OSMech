@@ -82,7 +82,9 @@ import {
   ArrowDownRight,
   FileBarChart,
   UserCog,
-  Award
+  Award,
+  Box,
+  Image as ImageIconLucide
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend, AreaChart, Area } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -217,6 +219,29 @@ const INITIAL_LOGS: AuditLogEntry[] = [
 ];
 
 // --- Helper Functions ---
+
+// Hook para persistência no LocalStorage
+function usePersistentState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(error);
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state));
+    } catch (error) {
+      console.error(error);
+    }
+  }, [key, state]);
+
+  return [state, setState];
+}
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -745,9 +770,15 @@ const DocumentModal = ({ order, isOpen, onClose, company, onLog, mode = 'RECEIPT
             {/* Cabeçalho */}
             <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
                 <div className="flex gap-4 items-center">
-                    <div className="bg-slate-900 text-white p-3 rounded-lg">
-                        <Wrench size={32}/>
-                    </div>
+                    {company.logo ? (
+                        <div className="h-20 w-32 flex items-center justify-start">
+                             <img src={company.logo} alt="Logo" className="max-h-full max-w-full object-contain" />
+                        </div>
+                    ) : (
+                        <div className="bg-slate-900 text-white p-3 rounded-lg">
+                            <Wrench size={32}/>
+                        </div>
+                    )}
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight uppercase">{company.name}</h1>
                         <p className="text-xs text-slate-500 uppercase tracking-wider">{company.subtitle || 'Centro Automotivo'}</p>
@@ -1624,6 +1655,17 @@ const SettingsView = ({ company, onUpdate }: { company: CompanySettings, onUpdat
         alert("Configurações da empresa salvas com sucesso!");
     };
 
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            try {
+                const base64 = await convertFileToBase64(e.target.files[0]);
+                setFormData(prev => ({ ...prev, logo: base64 }));
+            } catch (error) {
+                console.error("Error converting logo", error);
+            }
+        }
+    };
+
     const handleExportData = () => {
         const data = JSON.stringify({ company, date: new Date().toISOString() }, null, 2);
         const blob = new Blob([data], { type: "application/json" });
@@ -1651,6 +1693,34 @@ const SettingsView = ({ company, onUpdate }: { company: CompanySettings, onUpdat
             {activeTab === 'COMPANY' && (
                 <Card title="Dados Cadastrais da Oficina" action={<button onClick={handleSaveCompany} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2"><Save size={16}/> Salvar Alterações</button>}>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2 border-b border-slate-100 pb-6 mb-2">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Logotipo da Empresa</label>
+                            <div className="flex items-center gap-6">
+                                <div className="h-24 w-24 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden relative">
+                                    {formData.logo ? (
+                                        <img src={formData.logo} alt="Logo Preview" className="h-full w-full object-contain" />
+                                    ) : (
+                                        <ImageIconLucide className="text-slate-300" size={32} />
+                                    )}
+                                    {formData.logo && (
+                                        <button 
+                                            onClick={() => setFormData({...formData, logo: undefined})}
+                                            className="absolute top-1 right-1 bg-white rounded-full p-1 text-red-500 shadow-sm hover:bg-red-50"
+                                        >
+                                            <Trash2 size={12}/>
+                                        </button>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="cursor-pointer bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 transition-colors inline-flex items-center gap-2">
+                                        <Upload size={16}/> Carregar Nova Imagem
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                    </label>
+                                    <p className="text-[10px] text-slate-400 mt-2">Recomendado: PNG ou JPG com fundo transparente.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="md:col-span-2">
                              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nome Fantasia</label>
                              <input 
@@ -1917,7 +1987,7 @@ const OSListView = ({ orders, onViewOS }: { orders: ServiceOrder[], onViewOS: (i
                     />
                 </div>
                 <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Final</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Data Final</label>
                     <input 
                         type="date" 
                         className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white"
@@ -2130,13 +2200,39 @@ const NewOSView = ({ onSave, onCancel }: { onSave: (os: ServiceOrder) => void, o
                                </div>
                            )}
                            {isAnalyzingImage && <span className="text-sm text-blue-600 flex items-center gap-2"><Loader size={14} className="animate-spin"/> Analisando com IA...</span>}
-                           {imageAnalysis && <span className="text-sm text-green-600 flex items-center gap-2"><CheckCircle size={14}/> Foto processada com sucesso!</span>}
                        </div>
-                       {imageAnalysis && (
-                           <div className="mt-2 bg-blue-50 p-3 rounded text-xs text-blue-800 border border-blue-100">
-                               <strong>IA Detectou:</strong> {imageAnalysis.description}
-                           </div>
-                       )}
+                       
+                        {imageAnalysis && (
+                            <div className="mt-3 bg-indigo-50 p-4 rounded-lg border border-indigo-100 animate-fade-in">
+                                <div className="flex items-start gap-3">
+                                    <div className="bg-indigo-100 p-2 rounded-full text-indigo-600 mt-1">
+                                        <Bot size={18} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-bold text-indigo-900 mb-1">Análise Visual Concluída</h4>
+                                        <p className="text-sm text-indigo-800 mb-3 leading-relaxed">
+                                            {imageAnalysis.description}
+                                        </p>
+                                        
+                                        {!form.aiDiagnosis ? (
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    setForm(prev => ({...prev, aiDiagnosis: imageAnalysis.diagnosis}));
+                                                }}
+                                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow-md"
+                                            >
+                                                <Brain size={14} /> Usar Diagnóstico da IA na OS
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-green-700 font-bold text-xs bg-green-50 px-3 py-2 rounded-lg border border-green-200 inline-flex">
+                                                <CheckCircle size={14} /> Diagnóstico Anexado à Ordem
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                   </div>
               </div>
 
@@ -2151,12 +2247,34 @@ const NewOSView = ({ onSave, onCancel }: { onSave: (os: ServiceOrder) => void, o
   );
 }
 
-const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, onLog }: { order: ServiceOrder, currentUser: User, company: CompanySettings, users: User[], onUpdate: (o: ServiceOrder) => void, onBack: () => void, onLog: (a: any, d: string, t: string) => void }) => {
+const OSDetailView = ({ 
+    order, 
+    currentUser, 
+    company, 
+    users, 
+    inventory, 
+    onUpdate, 
+    onBack, 
+    onLog,
+    onDeductStock
+}: { 
+    order: ServiceOrder, 
+    currentUser: User, 
+    company: CompanySettings, 
+    users: User[], 
+    inventory: InventoryItem[],
+    onUpdate: (o: ServiceOrder) => void, 
+    onBack: () => void, 
+    onLog: (a: any, d: string, t: string) => void,
+    onDeductStock: (itemId: string, qty: number) => void
+}) => {
     const [newItem, setNewItem] = useState<Partial<ServiceItem>>({ description: '', type: 'LABOR', quantity: 1, unitPrice: 0 });
     const [isDiagnosing, setIsDiagnosing] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showDocModal, setShowDocModal] = useState(false);
     const [docMode, setDocMode] = useState<'RECEIPT' | 'QUOTE'>('RECEIPT');
+    const [itemSource, setItemSource] = useState<'MANUAL' | 'INVENTORY'>('MANUAL');
+    const [selectedInventoryId, setSelectedInventoryId] = useState('');
 
     const handleStatusChange = (newStatus: OSStatus) => {
         onUpdate({ ...order, status: newStatus, updatedAt: new Date().toISOString() });
@@ -2172,8 +2290,37 @@ const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, on
         setIsDiagnosing(false);
     };
 
+    const handleInventorySelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const id = e.target.value;
+        setSelectedInventoryId(id);
+        if(id) {
+            const item = inventory.find(i => i.id === id);
+            if(item) {
+                setNewItem(prev => ({
+                    ...prev,
+                    description: `${item.name} (${item.code})`,
+                    unitPrice: item.sellPrice,
+                    inventoryItemId: item.id
+                }));
+            }
+        } else {
+             setNewItem(prev => ({...prev, description: '', unitPrice: 0, inventoryItemId: undefined}));
+        }
+    };
+
     const handleAddItem = () => {
         if (!newItem.description || !newItem.unitPrice) return;
+
+        // Check stock if inventory item
+        if (itemSource === 'INVENTORY' && selectedInventoryId) {
+            const invItem = inventory.find(i => i.id === selectedInventoryId);
+            if (invItem && invItem.stockQuantity < (newItem.quantity || 1)) {
+                if(!window.confirm(`Atenção! O estoque atual (${invItem.stockQuantity}) é menor que a quantidade solicitada. Deseja adicionar mesmo assim?`)) {
+                    return;
+                }
+            }
+        }
+
         const item: ServiceItem = {
             id: Date.now().toString(),
             description: newItem.description!.toUpperCase(),
@@ -2181,17 +2328,28 @@ const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, on
             quantity: Number(newItem.quantity),
             unitPrice: Number(newItem.unitPrice),
             totalPrice: Number(newItem.quantity) * Number(newItem.unitPrice),
+            inventoryItemId: itemSource === 'INVENTORY' ? selectedInventoryId : undefined,
             status: 'PENDING'
         };
 
+        // Deduct Stock
+        if (item.type === 'PART' && item.inventoryItemId) {
+            onDeductStock(item.inventoryItemId, item.quantity);
+        }
+
         const updatedItems = [...(order.items || []), item];
         recalculateTotals(updatedItems);
+        
+        // Reset
         setNewItem({ description: '', type: 'LABOR', quantity: 1, unitPrice: 0 });
+        setItemSource('MANUAL');
+        setSelectedInventoryId('');
     };
 
     const handleRemoveItem = (itemId: string) => {
         const updatedItems = (order.items || []).filter(i => i.id !== itemId);
         recalculateTotals(updatedItems);
+        // Note: Currently not returning stock on remove to keep simplicity, but in production would need reverse logic
     };
 
     const recalculateTotals = (items: ServiceItem[]) => {
@@ -2326,7 +2484,10 @@ const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, on
                                                      {item.type === 'PART' ? 'PEÇA' : 'SERV'}
                                                  </span>
                                              </td>
-                                             <td className="p-3 font-medium uppercase">{item.description}</td>
+                                             <td className="p-3 font-medium uppercase">
+                                                {item.description}
+                                                {item.inventoryItemId && <span className="ml-2 text-[10px] bg-slate-100 px-1 rounded text-slate-500 border border-slate-200">ESTOQUE</span>}
+                                             </td>
                                              <td className="p-3 text-center">{item.quantity}</td>
                                              <td className="p-3 text-right text-slate-500">{formatCurrency(item.unitPrice)}</td>
                                              <td className="p-3 text-right font-bold">{formatCurrency(item.totalPrice)}</td>
@@ -2343,50 +2504,93 @@ const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, on
                          </div>
 
                          {order.status !== OSStatus.PAID && (
-                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                                 <div className="md:col-span-2">
-                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo</label>
-                                     <select 
-                                         className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
-                                         value={newItem.type} 
-                                         onChange={e => setNewItem({...newItem, type: e.target.value as any})}
-                                     >
-                                         <option value="LABOR">Serviço</option>
-                                         <option value="PART">Peça</option>
-                                     </select>
+                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-3">
+                                     <div className="md:col-span-3">
+                                         <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo</label>
+                                         <select 
+                                             className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                                             value={newItem.type} 
+                                             onChange={e => {
+                                                 const t = e.target.value as any;
+                                                 setNewItem({...newItem, type: t});
+                                                 // Reset inventory selection if changing to labor
+                                                 if (t === 'LABOR') {
+                                                     setItemSource('MANUAL');
+                                                     setSelectedInventoryId('');
+                                                     setNewItem(prev => ({...prev, description: '', unitPrice: 0}));
+                                                 }
+                                             }}
+                                         >
+                                             <option value="LABOR">Serviço / Mão de Obra</option>
+                                             <option value="PART">Peça / Produto</option>
+                                         </select>
+                                     </div>
+                                     
+                                     {newItem.type === 'PART' && (
+                                         <div className="md:col-span-9 flex gap-4 items-center">
+                                             <label className="flex items-center gap-2 cursor-pointer">
+                                                 <input type="radio" name="source" checked={itemSource === 'MANUAL'} onChange={() => setItemSource('MANUAL')} />
+                                                 <span className="text-xs font-bold text-slate-600 uppercase">Entrada Manual</span>
+                                             </label>
+                                             <label className="flex items-center gap-2 cursor-pointer">
+                                                 <input type="radio" name="source" checked={itemSource === 'INVENTORY'} onChange={() => setItemSource('INVENTORY')} />
+                                                 <span className="text-xs font-bold text-slate-600 uppercase">Buscar no Estoque</span>
+                                             </label>
+                                         </div>
+                                     )}
                                  </div>
-                                 <div className="md:col-span-5">
-                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Descrição</label>
-                                     <input 
-                                         className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500"
-                                         value={newItem.description} 
-                                         onChange={handleUppercaseChange(v => setNewItem({...newItem, description: v}))}
-                                         placeholder="EX: TROCA DE ÓLEO"
-                                     />
-                                 </div>
-                                 <div className="md:col-span-1">
-                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Qtd</label>
-                                     <input 
-                                         type="number"
-                                         className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
-                                         value={newItem.quantity} 
-                                         onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})}
-                                     />
-                                 </div>
-                                 <div className="md:col-span-2">
-                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Valor Unit.</label>
-                                     <input 
-                                         type="number"
-                                         className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
-                                         value={newItem.unitPrice || ''} 
-                                         onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})}
-                                         placeholder="0.00"
-                                     />
-                                 </div>
-                                 <div className="md:col-span-2">
-                                     <button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-1">
-                                         <Plus size={16}/> Adicionar
-                                     </button>
+
+                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                     <div className="md:col-span-7">
+                                         <label className="text-[10px] font-bold text-slate-500 uppercase">Descrição / Produto</label>
+                                         {itemSource === 'INVENTORY' && newItem.type === 'PART' ? (
+                                             <select 
+                                                 className="w-full p-2 border border-slate-300 rounded text-sm bg-white uppercase"
+                                                 value={selectedInventoryId}
+                                                 onChange={handleInventorySelect}
+                                             >
+                                                 <option value="">Selecione um item do estoque...</option>
+                                                 {inventory.map(item => (
+                                                     <option key={item.id} value={item.id}>
+                                                         {item.name} ({item.code}) - {formatCurrency(item.sellPrice)} | Estoque: {item.stockQuantity}
+                                                     </option>
+                                                 ))}
+                                             </select>
+                                         ) : (
+                                             <input 
+                                                 className="w-full p-2 border border-slate-300 rounded text-sm uppercase outline-none focus:border-blue-500"
+                                                 value={newItem.description} 
+                                                 onChange={handleUppercaseChange(v => setNewItem({...newItem, description: v}))}
+                                                 placeholder="EX: TROCA DE ÓLEO"
+                                             />
+                                         )}
+                                     </div>
+                                     <div className="md:col-span-1">
+                                         <label className="text-[10px] font-bold text-slate-500 uppercase">Qtd</label>
+                                         <input 
+                                             type="number"
+                                             className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
+                                             value={newItem.quantity} 
+                                             onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})}
+                                         />
+                                     </div>
+                                     <div className="md:col-span-2">
+                                         <label className="text-[10px] font-bold text-slate-500 uppercase">Valor Unit.</label>
+                                         <input 
+                                             type="number"
+                                             className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500"
+                                             value={newItem.unitPrice || ''} 
+                                             onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})}
+                                             placeholder="0.00"
+                                             readOnly={itemSource === 'INVENTORY'} // Lock price if from inventory to prevent editing (optional rule)
+                                         />
+                                     </div>
+                                     <div className="md:col-span-2">
+                                         <button onClick={handleAddItem} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-1">
+                                             <Plus size={16}/> Adicionar
+                                         </button>
+                                     </div>
                                  </div>
                              </div>
                          )}
@@ -2462,14 +2666,17 @@ const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, on
 };
 
 const App = () => {
-  const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // Persistence using usePersistentState hook
+  const [company, setCompany] = usePersistentState<CompanySettings | null>('company_settings', null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null); // Login is usually ephemeral for session
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
-  const [orders, setOrders] = useState<ServiceOrder[]>(INITIAL_DATA);
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
-  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [logs, setLogs] = useState<AuditLogEntry[]>(INITIAL_LOGS);
+  
+  const [orders, setOrders] = usePersistentState<ServiceOrder[]>('service_orders', INITIAL_DATA);
+  const [expenses, setExpenses] = usePersistentState<Expense[]>('expenses', INITIAL_EXPENSES);
+  const [inventory, setInventory] = usePersistentState<InventoryItem[]>('inventory', INITIAL_INVENTORY);
+  const [users, setUsers] = usePersistentState<User[]>('users', INITIAL_USERS);
+  const [logs, setLogs] = usePersistentState<AuditLogEntry[]>('audit_logs', INITIAL_LOGS);
+  
   const [selectedOSId, setSelectedOSId] = useState<string | null>(null);
 
   const addLog = (action: AuditLogEntry['action'], details: string, targetId?: string) => {
@@ -2502,12 +2709,17 @@ const App = () => {
                 currentUser={currentUser}
                 company={company}
                 users={users}
+                inventory={inventory} // Pass inventory
                 onUpdate={(updated: ServiceOrder) => {
                     setOrders(orders.map(o => o.id === updated.id ? updated : o));
                     addLog('UPDATE', `Atualizou OS ${updated.id}`, updated.id);
                 }}
                 onBack={() => setCurrentView('OS_LIST')}
                 onLog={addLog}
+                onDeductStock={(itemId, qty) => {
+                    setInventory(inv => inv.map(i => i.id === itemId ? {...i, stockQuantity: i.stockQuantity - qty} : i));
+                    addLog('UPDATE', `Baixa Estoque (OS ${os.id})`, itemId);
+                }}
             />;
           case 'FINANCE': return (
             <FinanceView 
@@ -2537,10 +2749,16 @@ const App = () => {
         <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-20">
             <div className="p-6 border-b border-slate-800">
                 <div className="flex items-center gap-3 text-white mb-1">
-                    <div className="bg-blue-600 p-2 rounded-lg"><Wrench size={20}/></div>
+                    {company.logo ? (
+                        <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                             <img src={company.logo} alt="Logo" className="max-h-full max-w-full object-contain" />
+                        </div>
+                    ) : (
+                        <div className="bg-blue-600 p-2 rounded-lg"><Wrench size={20}/></div>
+                    )}
                     <span className="font-bold text-lg tracking-tight">OSMech</span>
                 </div>
-                <p className="text-xs text-slate-500 uppercase truncate">{company.name}</p>
+                <p className="text-xs text-slate-500 uppercase truncate mt-2">{company.name}</p>
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

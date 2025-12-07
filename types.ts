@@ -31,6 +31,7 @@ export interface CompanySettings {
   phone: string;
   email?: string;
   subtitle?: string; // Slogan ou Subtítulo (ex: Centro Automotivo)
+  logo?: string; // Base64 image string
 }
 
 export interface AIDiagnosisResult {
@@ -116,6 +117,7 @@ export interface ServiceItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number; // quantity * unitPrice
+  inventoryItemId?: string; // Link para o item de estoque para controle de baixa/estorno
   
   // Detalhamento de Serviços
   status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'; 

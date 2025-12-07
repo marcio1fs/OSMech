@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore
 import html2canvas from 'html2canvas';
@@ -1826,27 +1824,115 @@ const DashboardView = ({ orders, expenses, logs, onViewOS, onNewOS }: { orders: 
 };
 
 const OSListView = ({ orders, onViewOS }: { orders: ServiceOrder[], onViewOS: (id: string) => void }) => {
-  const [filter, setFilter] = useState('');
+  const [textFilter, setTextFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
 
-  const filteredOrders = orders.filter(o => 
-      o.customerName.toLowerCase().includes(filter.toLowerCase()) || 
-      o.plate.toLowerCase().includes(filter.toLowerCase()) || 
-      o.id.toLowerCase().includes(filter.toLowerCase())
-  );
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+        // Text Match
+        const matchesText = 
+            o.customerName.toLowerCase().includes(textFilter.toLowerCase()) || 
+            o.plate.toLowerCase().includes(textFilter.toLowerCase()) || 
+            o.id.toLowerCase().includes(textFilter.toLowerCase());
+
+        // Status Match
+        const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+
+        // Date Match
+        const oDate = new Date(o.createdAt);
+        const start = dateStart ? new Date(dateStart) : null;
+        const end = dateEnd ? new Date(dateEnd) : null;
+        if(end) end.setHours(23, 59, 59, 999); // Adjust end date to cover the whole day
+
+        const matchesStart = !start || oDate >= start;
+        const matchesEnd = !end || oDate <= end;
+
+        return matchesText && matchesStatus && matchesStart && matchesEnd;
+    });
+  }, [orders, textFilter, statusFilter, dateStart, dateEnd]);
+
+  const clearFilters = () => {
+      setTextFilter('');
+      setStatusFilter('ALL');
+      setDateStart('');
+      setDateEnd('');
+  };
+
+  const hasActiveFilters = textFilter || statusFilter !== 'ALL' || dateStart || dateEnd;
 
   return (
-      <Card title="Ordens de Serviço" action={
-          <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={18}/>
-              <input 
-                  type="text" 
-                  placeholder="Buscar OS, Cliente ou Placa..." 
-                  className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 w-64"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-              />
+      <Card title="Gerenciamento de Ordens de Serviço">
+          {/* Advanced Filter Bar */}
+          <div className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-3 text-sm font-bold text-slate-600 uppercase">
+                <Filter size={16}/> Filtros de Busca
+                {hasActiveFilters && (
+                    <button onClick={clearFilters} className="ml-auto text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1">
+                        <X size={14}/> Limpar Filtros
+                    </button>
+                )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                {/* Search Text */}
+                <div className="md:col-span-4">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar (Cliente, Placa, ID)</label>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-2.5 text-slate-400" size={16}/>
+                        <input 
+                            type="text" 
+                            placeholder="Digite para buscar..." 
+                            className="pl-9 w-full p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white"
+                            value={textFilter}
+                            onChange={(e) => setTextFilter(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                {/* Status Filter */}
+                <div className="md:col-span-3">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status da OS</label>
+                    <select 
+                        className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                        <option value="ALL">Todos os Status</option>
+                        {Object.values(OSStatus).map(status => (
+                            <option key={status} value={status}>{status}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Date Range */}
+                <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Inicial</label>
+                    <input 
+                        type="date" 
+                        className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white"
+                        value={dateStart}
+                        onChange={(e) => setDateStart(e.target.value)}
+                    />
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Final</label>
+                    <input 
+                        type="date" 
+                        className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white"
+                        value={dateEnd}
+                        onChange={(e) => setDateEnd(e.target.value)}
+                    />
+                </div>
+                
+                {/* Result Count */}
+                <div className="md:col-span-1 flex justify-center pb-2">
+                     <span className="text-xs font-bold text-slate-400">{filteredOrders.length} Resultados</span>
+                </div>
+            </div>
           </div>
-      }>
+
           <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold">
@@ -1879,7 +1965,13 @@ const OSListView = ({ orders, onViewOS }: { orders: ServiceOrder[], onViewOS: (i
                       ))}
                   </tbody>
               </table>
-              {filteredOrders.length === 0 && <div className="p-8 text-center text-slate-500">Nenhuma OS encontrada.</div>}
+              {filteredOrders.length === 0 && (
+                  <div className="p-12 text-center flex flex-col items-center text-slate-400">
+                      <Search size={48} className="mb-4 opacity-20"/>
+                      <p className="font-bold">Nenhuma OS encontrada.</p>
+                      <p className="text-sm">Tente ajustar os filtros acima.</p>
+                  </div>
+              )}
           </div>
       </Card>
   );

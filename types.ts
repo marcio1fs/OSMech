@@ -17,6 +17,11 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  email?: string;
+  phone?: string;
+  specialty?: string; // Ex: Elétrica, Suspensão, Geral
+  commissionRate?: number; // Porcentagem de comissão sobre mão de obra (0-100)
+  active: boolean;
 }
 
 export interface CompanySettings {

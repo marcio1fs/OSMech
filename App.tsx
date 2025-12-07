@@ -82,7 +82,9 @@ import {
   PlayCircle,
   ArrowUpRight,
   ArrowDownRight,
-  FileBarChart
+  FileBarChart,
+  UserCog,
+  Award
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend, AreaChart, Area } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -110,9 +112,9 @@ import { StatusBadge } from './components/StatusBadge';
 
 // --- Mock Data ---
 const INITIAL_USERS: User[] = [
-  { id: 'u1', name: 'Roberto (Admin)', role: 'ADMIN', avatar: 'RO' },
-  { id: 'u2', name: 'Carlos (Mecânico)', role: 'MECHANIC', avatar: 'CA' },
-  { id: 'u3', name: 'Jorge (Mecânico)', role: 'MECHANIC', avatar: 'JO' }
+  { id: 'u1', name: 'Roberto (Admin)', role: 'ADMIN', avatar: 'RO', specialty: 'Gestão', active: true, email: 'roberto@osmech.com', phone: '(11) 99999-0001' },
+  { id: 'u2', name: 'Carlos (Mecânico)', role: 'MECHANIC', avatar: 'CA', specialty: 'Motor Diesel', commissionRate: 30, active: true, email: 'carlos@osmech.com', phone: '(11) 99999-0002' },
+  { id: 'u3', name: 'Jorge (Mecânico)', role: 'MECHANIC', avatar: 'JO', specialty: 'Suspensão e Freios', commissionRate: 30, active: true, email: 'jorge@osmech.com', phone: '(11) 99999-0003' }
 ];
 
 const COMMON_MANUFACTURERS = [
@@ -915,7 +917,7 @@ const LoginView = ({ users, onLogin }: { users: User[], onLogin: (u: User) => vo
             <p className="text-slate-500">Selecione seu usuário para entrar</p>
         </div>
         <div className="space-y-3">
-            {users.map(u => (
+            {users.filter(u => u.active).map(u => (
                 <button key={u.id} onClick={() => onLogin(u)} className="w-full flex items-center p-4 rounded-lg border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group">
                     <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 group-hover:bg-blue-200 group-hover:text-blue-700">
                         {u.avatar}
@@ -1361,6 +1363,213 @@ const FinanceView = ({ expenses, orders, onAddExpense, inventory, onUpdateInvent
                             </button>
                         </div>
                     </Card>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const TeamView = ({ users, orders, onUpdateUsers }: { users: User[], orders: ServiceOrder[], onUpdateUsers: (users: User[]) => void }) => {
+    const [activeTab, setActiveTab] = useState<'MEMBERS' | 'PERFORMANCE'>('MEMBERS');
+    const [showModal, setShowModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+
+    const [formData, setFormData] = useState<Partial<User>>({
+        name: '',
+        role: 'MECHANIC',
+        specialty: '',
+        email: '',
+        phone: '',
+        commissionRate: 0,
+        avatar: ''
+    });
+
+    const handleOpenModal = (user?: User) => {
+        if (user) {
+            setEditingUser(user);
+            setFormData(user);
+        } else {
+            setEditingUser(null);
+            setFormData({ name: '', role: 'MECHANIC', specialty: '', email: '', phone: '', commissionRate: 0, avatar: '', active: true });
+        }
+        setShowModal(true);
+    };
+
+    const handleSaveUser = () => {
+        if (!formData.name) return;
+
+        let updatedList = [...users];
+        if (editingUser) {
+            updatedList = updatedList.map(u => u.id === editingUser.id ? { ...u, ...formData } as User : u);
+        } else {
+            const newUser: User = {
+                id: `u${Date.now()}`,
+                active: true,
+                avatar: formData.name?.substring(0, 2).toUpperCase(),
+                ...formData
+            } as User;
+            updatedList.push(newUser);
+        }
+        onUpdateUsers(updatedList);
+        setShowModal(false);
+    };
+
+    const handleDeleteUser = (id: string) => {
+        if(window.confirm("Tem certeza que deseja desativar este usuário?")) {
+            onUpdateUsers(users.map(u => u.id === id ? { ...u, active: false } : u));
+        }
+    };
+
+    // Metrics Calculation
+    const mechanicsMetrics = useMemo(() => {
+        return users.filter(u => u.role === 'MECHANIC').map(m => {
+            const mechanicOrders = orders.filter(o => o.assignedMechanicId === m.id && (o.status === OSStatus.COMPLETED || o.status === OSStatus.PAID));
+            const totalLabor = mechanicOrders.reduce((sum, o) => sum + o.laborCost, 0);
+            const commission = totalLabor * ((m.commissionRate || 0) / 100);
+            return {
+                ...m,
+                completedOrders: mechanicOrders.length,
+                totalLabor,
+                commission
+            };
+        });
+    }, [users, orders]);
+
+    return (
+        <div className="space-y-6">
+            <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-hidden shadow-sm">
+                <button onClick={() => setActiveTab('MEMBERS')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'MEMBERS' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <Users size={18}/> Membros da Equipe
+                </button>
+                <button onClick={() => setActiveTab('PERFORMANCE')} className={`flex-1 py-4 font-bold text-sm uppercase flex items-center justify-center gap-2 ${activeTab === 'PERFORMANCE' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <Award size={18}/> Desempenho & Comissões
+                </button>
+            </div>
+
+            {activeTab === 'MEMBERS' && (
+                <div className="space-y-6">
+                    <div className="flex justify-end">
+                        <button onClick={() => handleOpenModal()} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors">
+                            <UserPlus size={18}/> Adicionar Membro
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {users.filter(u => u.active).map(user => (
+                            <div key={user.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow relative group">
+                                <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center text-2xl font-bold text-slate-600 mb-4 uppercase">
+                                    {user.avatar || user.name.substring(0, 2)}
+                                </div>
+                                <h3 className="font-bold text-slate-800 text-lg">{user.name}</h3>
+                                <span className={`text-xs px-2 py-1 rounded-full font-bold mt-1 ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                    {user.role === 'ADMIN' ? 'Administrador' : 'Mecânico'}
+                                </span>
+                                
+                                <div className="mt-4 w-full space-y-2 text-sm text-slate-500">
+                                    <p className="flex items-center justify-center gap-2"><Briefcase size={14}/> {user.specialty || 'Geral'}</p>
+                                    <p className="flex items-center justify-center gap-2"><Smartphone size={14}/> {user.phone || '-'}</p>
+                                    <p className="flex items-center justify-center gap-2"><Mail size={14}/> {user.email || '-'}</p>
+                                </div>
+
+                                <div className="mt-6 flex gap-2 w-full">
+                                    <button onClick={() => handleOpenModal(user)} className="flex-1 py-2 border border-slate-200 rounded-lg text-slate-600 font-bold hover:bg-slate-50 text-xs flex items-center justify-center gap-1">
+                                        <UserCog size={14}/> Editar
+                                    </button>
+                                    <button onClick={() => handleDeleteUser(user.id)} className="p-2 border border-red-100 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700">
+                                        <Trash2 size={16}/>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'PERFORMANCE' && (
+                <Card title="Relatório de Comissões (Mês Atual)" action={<button className="text-blue-600 font-bold text-sm flex items-center gap-1"><Download size={16}/> Exportar</button>}>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs">
+                                <tr>
+                                    <th className="p-3">Mecânico</th>
+                                    <th className="p-3">Especialidade</th>
+                                    <th className="p-3 text-center">OS Finalizadas</th>
+                                    <th className="p-3 text-right">Faturamento (Mão de Obra)</th>
+                                    <th className="p-3 text-right">Comissão (%)</th>
+                                    <th className="p-3 text-right">A Pagar</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {mechanicsMetrics.map(m => (
+                                    <tr key={m.id} className="hover:bg-slate-50">
+                                        <td className="p-3 font-medium flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+                                                {m.avatar}
+                                            </div>
+                                            {m.name}
+                                        </td>
+                                        <td className="p-3 text-slate-500 text-xs">{m.specialty || '-'}</td>
+                                        <td className="p-3 text-center font-bold text-slate-700">{m.completedOrders}</td>
+                                        <td className="p-3 text-right font-mono text-slate-600">{formatCurrency(m.totalLabor)}</td>
+                                        <td className="p-3 text-right font-mono text-slate-500">{m.commissionRate}%</td>
+                                        <td className="p-3 text-right font-mono font-bold text-green-600">{formatCurrency(m.commission)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* Edit/Add Modal */}
+            {showModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800">{editingUser ? 'Editar Membro' : 'Novo Membro'}</h3>
+                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nome Completo</label>
+                                <input className="w-full p-2 border border-slate-300 rounded outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Função</label>
+                                    <select className="w-full p-2 border border-slate-300 rounded outline-none bg-white" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})}>
+                                        <option value="MECHANIC">Mecânico</option>
+                                        <option value="ADMIN">Administrador</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Iniciais (Avatar)</label>
+                                    <input className="w-full p-2 border border-slate-300 rounded outline-none uppercase" maxLength={2} value={formData.avatar} onChange={handleUppercaseChange(v => setFormData({...formData, avatar: v}))} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Especialidade</label>
+                                <input className="w-full p-2 border border-slate-300 rounded outline-none" placeholder="Ex: Motor, Elétrica" value={formData.specialty} onChange={e => setFormData({...formData, specialty: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Telefone</label>
+                                    <input className="w-full p-2 border border-slate-300 rounded outline-none" value={formData.phone} onChange={e => setFormData({...formData, phone: formatPhone(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Comissão (%)</label>
+                                    <input type="number" className="w-full p-2 border border-slate-300 rounded outline-none" value={formData.commissionRate} onChange={e => setFormData({...formData, commissionRate: Number(e.target.value)})} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+                                <input type="email" className="w-full p-2 border border-slate-300 rounded outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                            </div>
+                            <button onClick={handleSaveUser} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mt-2">
+                                Salvar Dados
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -1988,7 +2197,7 @@ const OSDetailView = ({ order, currentUser, company, users, onUpdate, onBack, on
                              onChange={(e) => onUpdate({...order, assignedMechanicId: e.target.value})}
                          >
                              <option value="">Selecione...</option>
-                             {users.filter(u => u.role === 'MECHANIC').map(u => (
+                             {users.filter(u => u.role === 'MECHANIC' && u.active).map(u => (
                                  <option key={u.id} value={u.id}>{u.name}</option>
                              ))}
                          </select>
@@ -2022,6 +2231,7 @@ const App = () => {
   const [orders, setOrders] = useState<ServiceOrder[]>(INITIAL_DATA);
   const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
   const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [logs, setLogs] = useState<AuditLogEntry[]>(INITIAL_LOGS);
   const [selectedOSId, setSelectedOSId] = useState<string | null>(null);
 
@@ -2040,7 +2250,7 @@ const App = () => {
   };
 
   if (!company) return <SetupView onSave={setCompany} />;
-  if (!currentUser) return <LoginView users={INITIAL_USERS} onLogin={setCurrentUser} />;
+  if (!currentUser) return <LoginView users={users} onLogin={setCurrentUser} />;
 
   const renderContent = () => {
       switch(currentView) {
@@ -2054,7 +2264,7 @@ const App = () => {
                 order={os} 
                 currentUser={currentUser}
                 company={company}
-                users={INITIAL_USERS}
+                users={users}
                 onUpdate={(updated: ServiceOrder) => {
                     setOrders(orders.map(o => o.id === updated.id ? updated : o));
                     addLog('UPDATE', `Atualizou OS ${updated.id}`, updated.id);
@@ -2071,6 +2281,13 @@ const App = () => {
                 onUpdateInventory={(item: InventoryItem) => { setInventory(inventory.map(i => i.id === item.id ? item : i)); addLog('UPDATE', `Atualizou Estoque: ${item.code}`); }}
                 onAddInventory={(item: InventoryItem) => { setInventory([...inventory, item]); addLog('UPDATE', `Novo Item Estoque: ${item.code}`); }}
             />
+          );
+          case 'TEAM': return (
+              <TeamView 
+                  users={users} 
+                  orders={orders} 
+                  onUpdateUsers={(updatedUsers: User[]) => { setUsers(updatedUsers); addLog('UPDATE', 'Atualizou Cadastro de Equipe'); }} 
+              />
           );
           case 'AI_CHAT': return <AIChatView history={[]} />;
           case 'SETTINGS': return <SettingsView company={company} onUpdate={(c: CompanySettings) => { setCompany(c); addLog('UPDATE', 'Atualizou Configurações da Empresa'); }} />;
@@ -2123,6 +2340,7 @@ const App = () => {
                     {currentView === 'NEW_OS' && <><PlusCircle size={24} className="text-blue-600"/> Nova Ordem de Serviço</>}
                     {currentView === 'OS_DETAILS' && <><FileText size={24} className="text-blue-600"/> Detalhes da OS</>}
                     {currentView === 'FINANCE' && <><DollarSign size={24} className="text-blue-600"/> Gestão Financeira</>}
+                    {currentView === 'TEAM' && <><Users size={24} className="text-blue-600"/> Gestão de Equipe</>}
                     {currentView === 'AI_CHAT' && <><Bot size={24} className="text-blue-600"/> Mecânico Virtual IA</>}
                     {currentView === 'SETTINGS' && <><Settings size={24} className="text-blue-600"/> Configurações da Oficina</>}
                 </h2>

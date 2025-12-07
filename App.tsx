@@ -3,6 +3,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
 // @ts-ignore
 import { jsPDF } from "jspdf";
+// @ts-ignore
+import JSZip from "jszip";
+
 import { 
   LayoutDashboard, 
   Wrench, 
@@ -84,7 +87,8 @@ import {
   UserCog,
   Award,
   Box,
-  Image as ImageIconLucide
+  Image as ImageIconLucide,
+  Code
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie, Legend, AreaChart, Area } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -217,6 +221,82 @@ const INITIAL_LOGS: AuditLogEntry[] = [
     { id: 'log1', action: 'CREATE', userId: 'u1', userName: 'Roberto (Admin)', timestamp: new Date(Date.now() - 86400000 * 5).toISOString(), details: 'Criou OS-1001' },
     { id: 'log2', action: 'UPDATE', userId: 'u2', userName: 'Carlos (Mecânico)', timestamp: new Date(Date.now() - 86400000 * 4).toISOString(), details: 'Atualizou status OS-1001 para Em Execução' },
 ];
+
+// --- Backend Code Templates for Download ---
+const BACKEND_TEMPLATES = {
+    requirements: `fastapi
+uvicorn
+sqlmodel
+pydantic
+python-multipart`,
+    database: `from sqlmodel import SQLModel, create_engine, Session
+
+sqlite_file_name = "database.db"
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+
+engine = create_engine(sqlite_url, echo=True)
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+
+def get_session():
+    with Session(engine) as session:
+        yield session`,
+    models: `from typing import Optional, List
+from sqlmodel import Field, SQLModel, Relationship
+from datetime import datetime
+from enum import Enum
+
+class OSStatus(str, Enum):
+    PENDING = 'Pendente'
+    DIAGNOSING = 'Em Diagnóstico'
+    APPROVAL = 'Aguardando Aprovação'
+    WAITING_PARTS = 'Aguardando Peças'
+    IN_PROGRESS = 'Em Execução'
+    COMPLETED = 'Concluído'
+    PAID = 'Finalizado/Pago'
+
+class ServiceOrder(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_name: str
+    vehicle_model: str
+    plate: str
+    complaint: str
+    status: OSStatus = Field(default=OSStatus.PENDING)
+    total_cost: float = 0.0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+`,
+    main: `from fastapi import FastAPI, Depends, HTTPException
+from sqlmodel import Session, select
+from typing import List
+from database import create_db_and_tables, get_session
+from models import ServiceOrder, OSStatus
+
+app = FastAPI(title="OSMech API")
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
+
+@app.post("/os/", response_model=ServiceOrder)
+def create_os(os: ServiceOrder, session: Session = Depends(get_session)):
+    session.add(os)
+    session.commit()
+    session.refresh(os)
+    return os
+
+@app.get("/os/", response_model=List[ServiceOrder])
+def read_oss(session: Session = Depends(get_session)):
+    orders = session.exec(select(ServiceOrder)).all()
+    return orders
+
+@app.get("/os/{os_id}", response_model=ServiceOrder)
+def read_os(os_id: int, session: Session = Depends(get_session)):
+    os = session.get(ServiceOrder, os_id)
+    if not os:
+        raise HTTPException(status_code=404, detail="OS not found")
+    return os`
+};
 
 // --- Helper Functions ---
 
@@ -1676,6 +1756,22 @@ const SettingsView = ({ company, onUpdate }: { company: CompanySettings, onUpdat
         a.click();
     };
 
+    const handleDownloadBackend = () => {
+        const zip = new JSZip();
+        zip.file("requirements.txt", BACKEND_TEMPLATES.requirements);
+        zip.file("database.py", BACKEND_TEMPLATES.database);
+        zip.file("models.py", BACKEND_TEMPLATES.models);
+        zip.file("main.py", BACKEND_TEMPLATES.main);
+
+        zip.generateAsync({type:"blob"}).then((content: any) => {
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "osmech-backend.zip";
+            a.click();
+        });
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-hidden shadow-sm">
@@ -1815,6 +1911,13 @@ const SettingsView = ({ company, onUpdate }: { company: CompanySettings, onUpdat
                         <p className="text-sm text-slate-600 mb-4">Exporte todos os dados da oficina (clientes, OSs, financeiro) para um arquivo JSON seguro.</p>
                         <button onClick={handleExportData} className="w-full border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3 rounded-lg flex items-center justify-center gap-2">
                             <Download size={18}/> Fazer Backup Agora
+                        </button>
+                    </Card>
+
+                    <Card title="Código Fonte do Servidor">
+                        <p className="text-sm text-slate-600 mb-4">Baixe o backend completo em Python (FastAPI) para rodar este sistema localmente no seu servidor.</p>
+                        <button onClick={handleDownloadBackend} className="w-full bg-slate-800 text-white hover:bg-slate-900 font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                            <Code size={18}/> Baixar Código Fonte do Backend (ZIP)
                         </button>
                     </Card>
 

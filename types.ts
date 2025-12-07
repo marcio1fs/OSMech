@@ -1,3 +1,5 @@
+
+
 export enum OSStatus {
   PENDING = 'Pendente',
   DIAGNOSING = 'Em Diagnóstico',
@@ -17,6 +19,15 @@ export interface User {
   avatar?: string;
 }
 
+export interface CompanySettings {
+  name: string;
+  cnpj: string;
+  address: string;
+  phone: string;
+  email?: string;
+  subtitle?: string; // Slogan ou Subtítulo (ex: Centro Automotivo)
+}
+
 export interface AIDiagnosisResult {
   possibleCauses: string[];
   diagnosisSteps: string[];
@@ -34,6 +45,21 @@ export interface CustomerNotification {
   read: boolean;
 }
 
+// --- Finance Types ---
+
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  category: 'FIXED' | 'VARIABLE' | 'PAYROLL' | 'PARTS' | 'TAXES';
+  date: string;
+  userId: string; // Quem registrou
+}
+
+export type ExpenseCategoryLabel = {
+  [key in Expense['category']]: string;
+}
+
 // --- Mutation Inputs ---
 
 export interface CreateOSInput {
@@ -41,6 +67,9 @@ export interface CreateOSInput {
   customerCpf?: string;
   phone: string;
   vehicleModel: string;
+  vehicleManufacturer?: string;
+  vehicleYear?: number;
+  vehicleColor?: string; // Added field
   plate: string;
   currentMileage?: number;
   complaint: string;
@@ -49,6 +78,7 @@ export interface CreateOSInput {
   initialStatus?: OSStatus;
   estimatedLaborCost?: number;
   estimatedPartsCost?: number;
+  images?: string[]; // Base64 Images
 }
 
 export interface PaymentInput {
@@ -60,11 +90,17 @@ export interface PaymentInput {
 // Nova interface para itens individuais
 export interface ServiceItem {
   id: string;
+  code?: string; // Código da peça/serviço
   description: string;
   type: 'PART' | 'LABOR'; // Peça ou Mão de Obra
   quantity: number;
   unitPrice: number;
   totalPrice: number; // quantity * unitPrice
+  
+  // Detalhamento de Serviços
+  status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'; 
+  notes?: string; // Observações técnicas
+  mechanicId?: string; // Mecânico responsável pelo item
 }
 
 export interface ServiceOrder {
@@ -72,6 +108,9 @@ export interface ServiceOrder {
   customerName: string;
   customerCpf?: string;
   vehicleModel: string;
+  vehicleManufacturer?: string;
+  vehicleYear?: number;
+  vehicleColor?: string; // Added field
   plate: string;
   currentMileage?: number;
   phone: string;
@@ -79,6 +118,7 @@ export interface ServiceOrder {
   
   // AI Data
   aiDiagnosis?: AIDiagnosisResult;
+  images?: string[]; // Array de strings Base64 para evidências visuais
   
   // Execution
   mechanicNotes?: string;
@@ -88,9 +128,11 @@ export interface ServiceOrder {
   // Financial
   partsCost: number;
   laborCost: number;
+  discountPercentage?: number; // Novo campo: 0 a 10%
   totalCost: number;
   paymentMethod?: 'CREDIT_CARD' | 'DEBIT_CARD' | 'CASH' | 'PIX';
   paymentDate?: string;
+  fiscalNotes?: string; // Observações Fiscais para Nota Fiscal
   
   status: OSStatus;
   
@@ -113,7 +155,7 @@ export interface AuditLogEntry {
   snapshot?: ServiceOrder; // UC004: Snapshot for Audit/Recovery
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OS_LIST' | 'NEW_OS' | 'OS_DETAILS' | 'AI_CHAT' | 'REPORTS';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OS_LIST' | 'NEW_OS' | 'OS_DETAILS' | 'AI_CHAT' | 'REPORTS' | 'TEAM' | 'FINANCE' | 'SETTINGS';
 
 export interface DashboardStats {
   totalRevenue: number;

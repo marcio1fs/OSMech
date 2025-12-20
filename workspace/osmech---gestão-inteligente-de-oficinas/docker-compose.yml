@@ -1,0 +1,40 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - osmech-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/osmech.db
+      - SECRET_KEY=${SECRET_KEY:-super-secret-key-change-in-production}
+      - CORS_ORIGINS=http://localhost,http://localhost:80,http://localhost:3000
+    volumes:
+      - backend-data:/app/data
+    networks:
+      - osmech-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  osmech-network:
+    driver: bridge
+
+volumes:
+  backend-data:

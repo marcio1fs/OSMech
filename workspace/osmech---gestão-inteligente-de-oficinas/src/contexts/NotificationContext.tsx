@@ -111,9 +111,29 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     setNotifications(prev => [newNotification, ...prev]);
 
-    // Tocar som se configurado
+    // Tocar som se configurado e se o usuário já interagiu (evita política de autoplay)
     if (notification.sound !== false) {
-      playNotificationSound(notification.type);
+      try {
+        const userInteracted = (window as any).__userInteracted;
+        if (userInteracted) {
+          playNotificationSound(notification.type);
+        } else {
+          // Deferir som até a primeira interação do usuário
+          console.info('Notification sound deferred until user interaction');
+          const listener = () => {
+            try {
+              console.info('Playing deferred notification sound');
+              playNotificationSound(notification.type);
+            } catch (e) { /* ignore */ }
+            window.removeEventListener('click', listener);
+            window.removeEventListener('keydown', listener);
+          };
+          window.addEventListener('click', listener, { once: true });
+          window.addEventListener('keydown', listener, { once: true });
+        }
+      } catch (err) {
+        console.warn('Erro ao tentar tocar som de notificação:', err);
+      }
     }
 
     // Auto-remover notificações não persistentes após 5 segundos

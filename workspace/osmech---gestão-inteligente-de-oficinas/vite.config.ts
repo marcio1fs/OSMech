@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3001,
         strictPort: true, // Impede mudança automática de porta
-        host: '0.0.0.0',
+        host: 'localhost',
         hmr: {
           protocol: 'ws',
           host: 'localhost',

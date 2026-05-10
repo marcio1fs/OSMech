@@ -14,7 +14,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/os")
@@ -83,8 +87,33 @@ public class OsWhatsAppController {
                 "recibo", recibo));
     }
 
+    /**
+     * GET /api/os/{id}/recibo
+     * Retorna o texto do recibo da OS formatado (para reimpressão/visualização).
+     */
+    @GetMapping("/{id}/recibo")
+    public ResponseEntity<?> obterRecibo(Authentication auth, @PathVariable Long id) {
+        String email = auth.getName();
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario nao encontrado"));
+
+        OrdemServico os = osRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Ordem de Servico nao encontrada"));
+
+        if (!os.getUsuarioId().equals(usuario.getId())) {
+            throw new IllegalArgumentException("Acesso negado a esta Ordem de Servico");
+        }
+
+        List<ServicoOS> servicos = servicoOSRepository.findByOrdemServicoId(os.getId());
+        List<ItemOS> itens = itemOSRepository.findByOrdemServicoId(os.getId());
+
+        String recibo = montarReciboExtrato(usuario, os, servicos, itens);
+        return ResponseEntity.ok(java.util.Map.of("recibo", recibo));
+    }
+
     private String montarReciboExtrato(Usuario usuario, OrdemServico os,
                                        List<ServicoOS> servicos, List<ItemOS> itens) {
+        NumberFormat moeda = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         StringBuilder sb = new StringBuilder();
 
         sb.append("========================================\n");
@@ -131,10 +160,12 @@ public class OsWhatsAppController {
             sb.append("SERVICOS\n");
             sb.append("----------------------------------------\n");
             for (ServicoOS servico : servicos) {
+                BigDecimal valorUnitario = servico.getValorUnitario() != null ? servico.getValorUnitario() : BigDecimal.ZERO;
+                BigDecimal valorTotal = servico.getValorTotal() != null ? servico.getValorTotal() : BigDecimal.ZERO;
                 sb.append("- ").append(defaultText(servico.getDescricao())).append("\n");
                 sb.append("  Qtd: ").append(servico.getQuantidade())
-                        .append(" x R$ ").append(String.format("%.2f", servico.getValorUnitario()))
-                        .append(" = R$ ").append(String.format("%.2f", servico.getValorTotal()))
+                        .append(" x ").append(moeda.format(valorUnitario))
+                        .append(" = ").append(moeda.format(valorTotal))
                         .append("\n");
             }
             sb.append("\n");
@@ -145,20 +176,60 @@ public class OsWhatsAppController {
             sb.append("PECAS\n");
             sb.append("----------------------------------------\n");
             for (ItemOS item : itens) {
+                BigDecimal valorUnitario = item.getValorUnitario() != null ? item.getValorUnitario() : BigDecimal.ZERO;
+                BigDecimal valorTotal = item.getValorTotal() != null ? item.getValorTotal() : BigDecimal.ZERO;
                 sb.append("- ").append(defaultText(item.getNomeItem())).append("\n");
                 sb.append("  Qtd: ").append(item.getQuantidade())
-                        .append(" x R$ ").append(String.format("%.2f", item.getValorUnitario()))
-                        .append(" = R$ ").append(String.format("%.2f", item.getValorTotal()))
+                        .append(" x ").append(moeda.format(valorUnitario))
+                        .append(" = ").append(moeda.format(valorTotal))
                         .append("\n");
             }
             sb.append("\n");
         }
 
+        BigDecimal totalServicos = somarServicos(servicos);
+        BigDecimal totalPecas = somarItens(itens);
+        BigDecimal valorBruto = os.getValor() != null ? os.getValor() : totalServicos.add(totalPecas);
+        BigDecimal descontoPercentual = os.getDescontoPercentual() != null ? os.getDescontoPercentual() : BigDecimal.ZERO;
+        BigDecimal descontoValor = valorBruto.multiply(descontoPercentual)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal valorFinal = os.getValorFinal() != null ? os.getValorFinal() : valorBruto.subtract(descontoValor);
+
         sb.append("----------------------------------------\n");
-        sb.append("VALOR TOTAL: R$ ").append(String.format("%.2f", os.getValor() != null ? os.getValor() : 0)).append("\n");
+        sb.append("RESUMO FINANCEIRO\n");
+        sb.append("----------------------------------------\n");
+        sb.append("SERVICOS: ").append(moeda.format(totalServicos)).append("\n");
+        sb.append("PECAS: ").append(moeda.format(totalPecas)).append("\n");
+        sb.append("SUBTOTAL: ").append(moeda.format(valorBruto)).append("\n");
+        if (descontoPercentual.compareTo(BigDecimal.ZERO) > 0) {
+            sb.append("DESCONTO (")
+                    .append(descontoPercentual.stripTrailingZeros().toPlainString())
+                    .append("%): -")
+                    .append(moeda.format(descontoValor))
+                    .append("\n");
+        }
+        sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorFinal)).append("\n");
         sb.append("========================================\n");
         sb.append("Obrigado pela preferencia.");
         return sb.toString();
+    }
+
+    private BigDecimal somarServicos(List<ServicoOS> servicos) {
+        if (servicos == null || servicos.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return servicos.stream()
+                .map(servico -> servico.getValorTotal() != null ? servico.getValorTotal() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal somarItens(List<ItemOS> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return itens.stream()
+                .map(item -> item.getValorTotal() != null ? item.getValorTotal() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private String montarEnderecoOficina(Usuario usuario) {

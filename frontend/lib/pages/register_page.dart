@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/upper_text.dart';
 
 /// Tela de Cadastro moderna.
 class RegisterPage extends StatefulWidget {
@@ -56,7 +57,24 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
       );
     } else if (mounted) {
-      Navigator.pop(context);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const UpperText('Cadastro realizado'),
+          content: const UpperText(
+              'Sua conta foi criada. Voce ja pode fazer login. Se receber o e-mail de verificacao, confirme para manter seus dados atualizados.'),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx); // fecha dialog
+                Navigator.pop(context); // volta pro login
+              },
+              child: const UpperText('Entendido'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -263,7 +281,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           controller: _senhaController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            hintText: 'Mínimo 6 caracteres',
+                            hintText: 'Mínimo 8 caracteres',
                             prefixIcon: const Icon(Icons.lock_outline_rounded,
                                 size: 20),
                             suffixIcon: IconButton(
@@ -282,7 +300,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             if (v == null || v.isEmpty) {
                               return 'Informe uma senha';
                             }
-                            if (v.length < 6) return 'Mínimo 6 caracteres';
+                            if (v.length < 8) return 'Mínimo 8 caracteres';
                             return null;
                           },
                         ),

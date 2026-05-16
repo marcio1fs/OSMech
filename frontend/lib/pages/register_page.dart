@@ -263,7 +263,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           controller: _senhaController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            hintText: 'Mínimo 6 caracteres',
+                            hintText: 'Mínimo 8 caracteres',
                             prefixIcon: const Icon(Icons.lock_outline_rounded,
                                 size: 20),
                             suffixIcon: IconButton(
@@ -282,7 +282,21 @@ class _RegisterPageState extends State<RegisterPage> {
                             if (v == null || v.isEmpty) {
                               return 'Informe uma senha';
                             }
-                            if (v.length < 6) return 'Mínimo 6 caracteres';
+                            if (v.length < 8) {
+                              return 'Mínimo 8 caracteres';
+                            }
+                            if (!v.contains(RegExp(r'[A-Z]'))) {
+                              return 'Deve conter uma letra maiúscula';
+                            }
+                            if (!v.contains(RegExp(r'[a-z]'))) {
+                              return 'Deve conter uma letra minúscula';
+                            }
+                            if (!v.contains(RegExp(r'[0-9]'))) {
+                              return 'Deve conter um número';
+                            }
+                            if (!v.contains(RegExp(r'[!@#$%^&*()_+\-=\[\]{}\';:\\"\\|,.<>\/?]'))) {
+                              return 'Deve conter um caractere especial';
+                            }
                             return null;
                           },
                         ),

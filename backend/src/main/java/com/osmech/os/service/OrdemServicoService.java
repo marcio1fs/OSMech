@@ -700,6 +700,7 @@ public class OrdemServicoService {
 
     /**
      * Devolve itens de estoque ao estoque (quando OS é editada ou excluída).
+     * Registra movimentação de devolução.
      */
     private void devolverItensEstoque(List<ItemOS> itens, Long usuarioId, Long osId) {
         if (itens == null || itens.isEmpty()) return;
@@ -711,8 +712,20 @@ public class OrdemServicoService {
                     int qtdAnterior = stockItem.getQuantidade();
                     stockItem.setQuantidade(qtdAnterior + item.getQuantidade());
                     stockItemRepository.save(stockItem);
-                    log.info("Devolvido ao estoque: {} x{} (OS #{})",
-                            stockItem.getCodigo(), item.getQuantidade(), osId);
+                    
+                    // Registrar movimentação de devolução
+                    StockMovementRequest movReq = StockMovementRequest.builder()
+                            .stockItemId(stockItem.getId())
+                            .tipo("ENTRADA")
+                            .quantidade(item.getQuantidade())
+                            .motivo("DEVOLUCAO")
+                            .descricao("Devolução - OS #" + osId)
+                            .ordemServicoId(osId)
+                            .build();
+                    stockService.darBaixaOS(usuarioId, osId, List.of(movReq));
+                    
+                    log.info("Devolvido ao estoque: {} x{} (OS #{}) - {} -> {}",
+                            stockItem.getCodigo(), item.getQuantidade(), osId, qtdAnterior, stockItem.getQuantidade());
                 }
             } catch (Exception e) {
                 log.warn("Falha ao devolver item {} ao estoque (OS #{}): {}",

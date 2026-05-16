@@ -5,6 +5,14 @@ import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import '../utils/jwt_utils.dart';
 
+/// Exceção lançada quando há erro de conexão/rede.
+class NetworkException implements Exception {
+  final String message;
+  NetworkException([this.message = 'Erro de conexão. Verifique sua internet.']);
+  @override
+  String toString() => message;
+}
+
 /// Exceção lançada quando o token JWT expirou ou é inválido (HTTP 401).
 class UnauthorizedException implements Exception {
   final String message;
@@ -40,11 +48,30 @@ class ApiTimeoutException implements Exception {
   String toString() => message;
 }
 
+/// Exceção lançada quando o recurso não foi encontrado (HTTP 404).
+class NotFoundException implements Exception {
+  final String message;
+  NotFoundException([this.message = 'Recurso não encontrado.']);
+  @override
+  String toString() => message;
+}
+
+/// Exceção lançada quando há erro na requisição (HTTP 400).
+class BadRequestException implements Exception {
+  final String message;
+  BadRequestException([this.message = 'Requisição inválida.']);
+  @override
+  String toString() => message;
+}
+
 /// Cliente HTTP centralizado com interceptor de autenticação.
 /// Garante timeout consistente, headers padrão e detecção de erros HTTP.
 /// Valida expiração do JWT ANTES de enviar cada requisição.
+/// Implementa retry automático para falhas temporárias de rede.
 class ApiClient {
   final String token;
+  static const int maxRetries = 3;
+  static const Duration retryDelay = Duration(milliseconds: 500);
 
   ApiClient({required this.token});
 
@@ -66,35 +93,106 @@ class ApiClient {
 
   /// Verifica códigos de erro HTTP e lança exceções específicas.
   void _checkResponse(http.Response response) {
-    if (response.statusCode == 401) {
-      throw UnauthorizedException();
-    }
-    if (response.statusCode == 403) {
-      throw ForbiddenException();
-    }
-    if (response.statusCode >= 500) {
-      String detail = 'Erro interno do servidor. Tente novamente.';
-      if (response.body.isNotEmpty) {
-        try {
-          final body = jsonDecode(response.body);
-          if (body is Map && body['detail'] != null) {
-            detail = body['detail'].toString();
-          } else if (body is Map && body['error'] != null) {
-            detail = body['error'].toString();
-          }
-        } catch (_) {}
-      }
-      throw ServerException(detail);
+    switch (response.statusCode) {
+      case 400:
+        String detail = 'Requisição inválida.';
+        if (response.body.isNotEmpty) {
+          try {
+            final body = jsonDecode(response.body);
+            if (body is Map && body['error'] != null) {
+              detail = body['error'].toString();
+            } else if (body is Map && body['message'] != null) {
+              detail = body['message'].toString();
+            }
+          } catch (_) {}
+        }
+        throw BadRequestException(detail);
+      case 401:
+        throw UnauthorizedException();
+      case 403:
+        throw ForbiddenException();
+      case 404:
+        String detail = 'Recurso não encontrado.';
+        if (response.body.isNotEmpty) {
+          try {
+            final body = jsonDecode(response.body);
+            if (body is Map && body['error'] != null) {
+              detail = body['error'].toString();
+            } else if (body is Map && body['message'] != null) {
+              detail = body['message'].toString();
+            }
+          } catch (_) {}
+        }
+        throw NotFoundException(detail);
+      case 409:
+        String detail = 'Conflito na operação.';
+        if (response.body.isNotEmpty) {
+          try {
+            final body = jsonDecode(response.body);
+            if (body is Map && body['error'] != null) {
+              detail = body['error'].toString();
+            }
+          } catch (_) {}
+        }
+        throw BadRequestException(detail);
+      case 422:
+        String detail = 'Dados inválidos.';
+        if (response.body.isNotEmpty) {
+          try {
+            final body = jsonDecode(response.body);
+            if (body is Map && body['error'] != null) {
+              detail = body['error'].toString();
+            } else if (body is Map && body['message'] != null) {
+              detail = body['message'].toString();
+            }
+          } catch (_) {}
+        }
+        throw BadRequestException(detail);
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        String detail = 'Erro interno do servidor. Tente novamente.';
+        if (response.body.isNotEmpty) {
+          try {
+            final body = jsonDecode(response.body);
+            if (body is Map && body['detail'] != null) {
+              detail = body['detail'].toString();
+            } else if (body is Map && body['error'] != null) {
+              detail = body['error'].toString();
+            }
+          } catch (_) {}
+        }
+        throw ServerException(detail);
     }
   }
 
-  /// Wrapper para tratar TimeoutException.
+  /// Wrapper para tratar TimeoutException e NetworkException com retry.
   Future<http.Response> _withTimeout(Future<http.Response> request) async {
-    try {
-      return await request.timeout(_timeout);
-    } on TimeoutException {
-      throw ApiTimeoutException();
+    int attempts = 0;
+    
+    while (attempts < maxRetries) {
+      try {
+        return await request.timeout(_timeout);
+      } on TimeoutException {
+        attempts++;
+        debugPrint('[ApiClient] Timeout (tentativa $attempts/$maxRetries)');
+        if (attempts >= maxRetries) {
+          throw ApiTimeoutException();
+        }
+        await Future.delayed(retryDelay * attempts);
+      } on http.ClientException catch (e) {
+        // Erro de rede/conexão
+        attempts++;
+        debugPrint('[ApiClient] Erro de rede (tentativa $attempts/$maxRetries): ${e.message}');
+        if (attempts >= maxRetries) {
+          throw NetworkException('Erro de conexão. Verifique sua internet.');
+        }
+        await Future.delayed(retryDelay * attempts);
+      }
     }
+    
+    throw ApiTimeoutException();
   }
 
   /// GET request com autenticação.

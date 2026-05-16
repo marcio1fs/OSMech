@@ -55,8 +55,8 @@ public class MercadoPagoWebhookService {
             log.warn("===========================================================");
             log.warn("WARNING: MercadoPago webhook secret is NOT configured!");
             log.warn("Set MERCADOPAGO_WEBHOOK_SECRET environment variable.");
-            log.warn("Webhook requests will be ACCEPTED WITHOUT SIGNATURE VALIDATION.");
-            log.warn("This is acceptable for LOCAL DEVELOPMENT only.");
+            log.warn("Webhook requests will be REJECTED without signature validation.");
+            log.warn("This is a SECURITY MEASURE to prevent fraudulent webhooks.");
             log.warn("===========================================================");
         } else {
             log.info("MercadoPago webhook signature validation is ENABLED.");

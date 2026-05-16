@@ -222,21 +222,31 @@ public class StockService {
             }
 
             int qtdAnterior = item.getQuantidade();
-            if (item.getQuantidade() < req.getQuantidade()) {
-                throw new IllegalArgumentException(
-                        "Estoque insuficiente para " + item.getNome() +
-                        ". Disponível: " + item.getQuantidade() +
-                        ", necessário: " + req.getQuantidade());
+            
+            // Para DEVOLUCAO, adiciona ao invés de remover
+            int novaQtd;
+            String tipoMovimento;
+            if ("DEVOLUCAO".equals(req.getMotivo())) {
+                novaQtd = item.getQuantidade() + req.getQuantidade();
+                tipoMovimento = "ENTRADA";
+            } else {
+                if (item.getQuantidade() < req.getQuantidade()) {
+                    throw new IllegalArgumentException(
+                            "Estoque insuficiente para " + item.getNome() +
+                            ". Disponível: " + item.getQuantidade() +
+                            ", necessário: " + req.getQuantidade());
+                }
+                novaQtd = item.getQuantidade() - req.getQuantidade();
+                tipoMovimento = "SAIDA";
             }
-
-            int novaQtd = item.getQuantidade() - req.getQuantidade();
+            
             item.setQuantidade(novaQtd);
             itemRepository.save(item);
 
-            registrarMovimentacao(item, "SAIDA", req.getQuantidade(), qtdAnterior,
-                    novaQtd, "OS", "Baixa automática - OS #" + ordemServicoId, ordemServicoId);
+            registrarMovimentacao(item, tipoMovimento, req.getQuantidade(), qtdAnterior,
+                    novaQtd, req.getMotivo(), req.getDescricao(), ordemServicoId);
 
-            log.info("Baixa OS #{}: {} x{} ({} -> {})", ordemServicoId,
+            log.info("{} OS #{}: {} x{} ({} -> {})", tipoMovimento, ordemServicoId,
                     item.getCodigo(), req.getQuantidade(), qtdAnterior, novaQtd);
         }
     }

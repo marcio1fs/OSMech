@@ -18,6 +18,12 @@ spring:
       max-lifetime: 1200000
       leak-detection-threshold: 30000
 
+  # Timeouts para requisições HTTP externas
+  http:
+    connect-timeout: 5000
+    read-timeout: 30000
+    write-timeout: 30000
+
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:validate}
@@ -42,16 +48,43 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION:86400000}  # 24 horas
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 dias
+  security:
+    max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
+    lockout-duration-ms: ${LOCKOUT_DURATION:900000}  # 15 minutos
+    rate-limit-requests: ${RATE_LIMIT_REQUESTS:100}
+    rate-limit-window-ms: ${RATE_LIMIT_WINDOW:60000}  # 1 minuto
 
 # Actuator (health checks e métricas)
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: false  # Usamos nosso próprio DatabaseHealthIndicator
+    diskspace:
+      enabled: false  # Usamos nosso próprio StorageHealthIndicator
+    ping:
+      enabled: true
+
+# Configurações de Health Check
+db:
+  health:
+    query-timeout-ms: ${DB_HEALTH_QUERY_TIMEOUT:1000}
+
+storage:
+  min-free-space-mb: ${STORAGE_MIN_FREE_SPACE_MB:100}
+
+external:
+  services:
+    timeout-ms: ${EXTERNAL_SERVICES_TIMEOUT:5000}
 
 # CORS
 cors:
@@ -88,8 +121,40 @@ mercadopago:
     failure: ${MERCADOPAGO_FAILURE_URL:}
   notification-url: ${MERCADOPAGO_NOTIFICATION_URL:}
   webhook-secret: ${MERCADOPAGO_WEBHOOK_SECRET:}
+  retry:
+    max-attempts: ${MERCADOPAGO_RETRY_MAX_ATTEMPTS:3}
+    delay-ms: ${MERCADOPAGO_RETRY_DELAY:2000}
+
+# Configurações de Backup
+backup:
+  enabled: ${BACKUP_ENABLED:true}
+  directory: ${BACKUP_DIR:/var/backups/osmech}
+  retention-days: ${BACKUP_RETENTION_DAYS:30}
+  encryption-enabled: ${BACKUP_ENCRYPTION:false}
+  s3:
+    enabled: ${S3_BACKUP_ENABLED:false}
+    bucket: ${S3_BUCKET:}
+    region: ${S3_REGION:us-east-1}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+  gcs:
+    enabled: ${GCS_BACKUP_ENABLED:false}
+    bucket: ${GCS_BUCKET:}
+    credentials-path: ${GCS_CREDENTIALS_PATH:}
+  notifications:
+    enabled: ${BACKUP_NOTIFICATIONS:false}
+    webhook: ${BACKUP_NOTIFICATION_WEBHOOK:}
+
+# Configurações de Upload de Arquivos
+upload:
+  max-file-size: ${UPLOAD_MAX_FILE_SIZE:10485760}  # 10MB
+  max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:20971520}  # 20MB
+  allowed-image-types: ${UPLOAD_ALLOWED_IMAGE_TYPES:image/jpeg,image/png,image/gif,image/webp}
+  allowed-document-types: ${UPLOAD_ALLOWED_DOCUMENT_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain}
+  storage-path: ${UPLOAD_STORAGE_PATH:/var/osmech/uploads}
+  cleanup-enabled: ${UPLOAD_CLEANUP_ENABLED:true}
 
 logging:
   level:
     com.osmech.payment.service: DEBUG
-
+    org.springframework.retry: INFO

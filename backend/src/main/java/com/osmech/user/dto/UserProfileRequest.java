@@ -1,5 +1,7 @@
 package com.osmech.user.dto;
 
+import com.osmech.util.DocumentoValidator;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -46,4 +48,12 @@ public class UserProfileRequest {
 
     @Size(max = 120, message = "Site deve ter no máximo 120 caracteres")
     private String siteOficina;
+
+    @AssertTrue(message = "CNPJ da oficina inválido")
+    public boolean isCnpjOficinaValido() {
+        if (cnpjOficina == null || cnpjOficina.isBlank()) {
+            return true;
+        }
+        return DocumentoValidator.isValidCNPJ(cnpjOficina);
+    }
 }

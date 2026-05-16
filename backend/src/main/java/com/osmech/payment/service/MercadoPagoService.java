@@ -14,6 +14,8 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -54,6 +56,11 @@ public class MercadoPagoService {
         this.preferenceClient = client;
     }
 
+    @Retryable(
+        value = {Exception.class},
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 2000)
+    )
     public Preference criarPreferenciaAssinatura(Usuario usuario,
                                                  Plano plano,
                                                  Assinatura assinatura,

@@ -1,44 +1,38 @@
-# === Subrepositório duplicado ===
-/OSMech/
+```
+# Java/Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
 
-# === Backend (Java/Maven) ===
-backend/target/
-backend/.mvn/
-backend/*.iml
-backend/.idea/
-backend/.env
-backend/.env.*
-!backend/.env.example
-backend/logs/
-backend/*.log
-
-# === Frontend (Flutter/Dart) ===
-frontend/.dart_tool/
-frontend/.packages
-frontend/build/
-frontend/.flutter-plugins
-frontend/.flutter-plugins-dependencies
-frontend/.idea/
-frontend/*.iml
-frontend/android/
-frontend/ios/
-frontend/linux/
-frontend/macos/
-frontend/windows/
-frontend/test/
-frontend/.gitignore
-frontend/analysis_options.yaml
-
-# === IDE ===
+# IDE
 .idea/
 *.iml
-.vscode/
-*.swp
-*.swo
+*.ipr
+*.iws
 
-# === OS ===
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# === Logs ===
-*.log
+# Test reports
+test-results/
+surefire-reports/
+
+# Local configuration
+local.properties
+```

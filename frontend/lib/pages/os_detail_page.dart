@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/os_service.dart';
 import '../theme/app_theme.dart';
@@ -279,134 +281,107 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
   }
 
   void _mostrarRecibo(String recibo, bool whatsappEnviado) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Recibo / Extrato',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
-        child: Column(
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(top: 12),
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Recibo da OS',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
+        content: SizedBox(
+          width: 640,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (whatsappEnviado) ...[
+                Text(
+                  'WhatsApp: Recibo enviado com sucesso!',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Text(
+                ),
+                const SizedBox(height: 8),
+              ],
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 420),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: SingleChildScrollView(
+                  child: SelectableText(
                     recibo,
-                    style: GoogleFonts.courierPrime(
-                      fontSize: 12,
-                      color: Colors.black87,
-                      height: 1.5,
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 12.5,
+                      color: AppColors.textPrimary,
+                      height: 1.4,
                     ),
                   ),
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        // Print functionality - opens browser print dialog
-                        _imprimirRecibo(recibo);
-                      },
-                      icon: const Icon(Icons.print),
-                      label: const Text('Imprimir'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        // Copy to clipboard
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Recibo copiado para a área de transferência!'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.copy),
-                      label: const Text('Copiar'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  void _imprimirRecibo(String recibo) {
-    // Show print options
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Imprimir Recibo'),
-        content: const Text('Para imprimir o recibo, você pode usar a função de impressão do navegador (Ctrl+P) ou salvar como PDF.'),
         actions: [
-          TextButton(
+          TextButton.icon(
+            onPressed: () => _imprimirRecibo(recibo),
+            icon: const Icon(Icons.print_rounded, size: 16),
+            label: const Text('Imprimir recibo'),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: recibo));
+              if (!mounted) return;
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Recibo copiado para a área de transferência'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text('Copiar recibo'),
+          ),
+          FilledButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
+            child: const Text('Fechar'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _imprimirRecibo(String recibo) async {
+    final html = '''
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Recibo OSMech</title>
+  <style>
+    body { font-family: Consolas, monospace; padding: 24px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>${recibo.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</body>
+<script>window.print();</script>
+</html>''';
+    final uri = Uri.dataFromString(html,
+        mimeType: 'text/html', encoding: Encoding.getByName('utf-8'));
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível abrir a tela de impressão'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _enviarReciboWhatsApp() async {

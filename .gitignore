@@ -1,18 +1,33 @@
 ```
-# Java/Maven
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
 target/
-*.class
-*.jar
-*.war
-*.ear
+.gradle/
 
-# IDE
+# Editor/IDE files
+.vscode/
 .idea/
-*.iml
-*.ipr
-*.iws
+*.swp
+*.swo
+*.tmp
 
-# Environment
+# System files
+.DS_Store
+Thumbs.db
 .env
 .env.local
 *.env.*
@@ -20,19 +35,32 @@ target/
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-*.temp
-*~
+# Coverage
+coverage/
+htmlcov/
+.coverage
 
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Test reports
-test-results/
-surefire-reports/
-
-# Local configuration
-local.properties
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```

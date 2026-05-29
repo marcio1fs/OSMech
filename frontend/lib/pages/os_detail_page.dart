@@ -1,13 +1,18 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/api_client.dart';
+import '../services/api_config.dart';
 import '../services/os_service.dart';
 import '../theme/app_theme.dart';
 import '../mixins/auth_error_mixin.dart';
 import '../utils/formatters.dart';
 import 'os_form_page.dart';
 import '../widgets/upper_text.dart';
+import '../utils/receipt_print.dart';
 
 /// Página de detalhes da OS com design moderno e profissional.
 class OsDetailPage extends StatefulWidget {
@@ -23,6 +28,7 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
   late Map<String, dynamic> _os;
   bool _loading = false;
   bool _encerrando = false;
+  String? _logoUrl;
 
   @override
   void initState() {
@@ -327,8 +333,10 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
 
       // If receipt was generated, show options to print or send
       if (response['recibo'] != null && !mounted) return;
-      
-      _mostrarRecibo(response['recibo'] ?? '', result['enviarReciboWhatsapp'] == true);
+
+      _logoUrl ??= await _buscarLogoUrl();
+      if (!mounted) return;
+      _mostrarRecibo(response['recibo'] ?? '', result['enviarReciboWhatsapp'] == true, logoUrl: _logoUrl);
     } catch (e) {
       if (!handleAuthError(e)) {
         if (!mounted) return;
@@ -347,7 +355,23 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
     }
   }
 
-  void _mostrarRecibo(String recibo, bool whatsappEnviado) {
+  /// Busca a URL absoluta do logo da oficina a partir do perfil do usuário.
+  Future<String?> _buscarLogoUrl() async {
+    try {
+      final api = ApiClient(token: safeToken);
+      final response = await api.get('/api/usuario/perfil');
+      if (response.statusCode == 200) {
+        final profile = jsonDecode(response.body) as Map<String, dynamic>;
+        final logo = profile['logoUrl']?.toString();
+        if (logo != null && logo.isNotEmpty) {
+          return ApiConfig.absoluteUrl(logo);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  void _mostrarRecibo(String recibo, bool whatsappEnviado, {String? logoUrl}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -370,16 +394,34 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  UpperText(
-                    'Recibo da OS',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      if (logoUrl != null && logoUrl.isNotEmpty) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            logoUrl,
+                            height: 44,
+                            width: 44,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
+                      UpperText(
+                        'Recibo da OS',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(ctx),
@@ -427,9 +469,10 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        // Print functionality - opens browser print dialog
-                        _imprimirRecibo(recibo);
+                      onPressed: () async {
+                        await _imprimirRecibo(recibo, logoUrl: logoUrl);
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
                       },
                       icon: const Icon(Icons.print),
                       label: const UpperText('Imprimir'),
@@ -438,9 +481,10 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () {
-                        // Copy to clipboard
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: recibo));
                         Navigator.pop(ctx);
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: UpperText('Recibo copiado para a área de transferência!'),
@@ -461,21 +505,19 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
     );
   }
 
-  void _imprimirRecibo(String recibo) {
-    // Show print options
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const UpperText('Imprimir Recibo'),
-        content: const UpperText('Para imprimir o recibo, você pode usar a função de impressão do navegador (Ctrl+P) ou salvar como PDF.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const UpperText('OK'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _imprimirRecibo(String recibo, {String? logoUrl}) async {
+    try {
+      await printReceiptText(recibo, 'Recibo_OS_${_os['id']}', logoUrl: logoUrl);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: UpperText('Erro ao imprimir recibo: $e'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _enviarReciboWhatsApp() async {
@@ -765,8 +807,22 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () {
-                              _mostrarRecibo('Recibo da OS #${_os['id']}\n\nCliente: ${_os['clienteNome']}\nValor: ${formatCurrency(_os['valor'] ?? 0)}', false);
+                            onPressed: () async {
+                              try {
+                                final osService = OsService(token: safeToken);
+                                final results = await Future.wait([
+                                  osService.obterRecibo(_os['id']),
+                                  _buscarLogoUrl(),
+                                ]);
+                                if (!mounted) return;
+                                _logoUrl = results[1] as String?;
+                                _mostrarRecibo(results[0] as String, false, logoUrl: _logoUrl);
+                              } catch (e) {
+                                if (!mounted) return;
+                                _logoUrl ??= await _buscarLogoUrl();
+                                if (!mounted) return;
+                                _mostrarRecibo('Recibo da OS #${_os['id']}\n\nCliente: ${_os['clienteNome']}\nValor: ${formatCurrency(_os['valor'] ?? 0)}', false, logoUrl: _logoUrl);
+                              }
                             },
                             icon: const Icon(Icons.receipt_long),
                             label: const UpperText('Ver Recibo'),
@@ -973,5 +1029,8 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
       default:
         return status;
     }
+  }
+  void _retornarParaListaOs() {
+    Navigator.pop(context, {'refresh': true});
   }
 }

@@ -25,9 +25,9 @@ Future<void> printReceiptText(String receipt, String name, {String? logoUrl}) as
     throw Exception('Não foi possível obter o contexto de impressão do navegador.');
   }
 
-  // Cast para html.Window para acessar document, focus() e print()
+  // Cast para html.Window para acessar document, e depois para html.HtmlDocument
   final realWindow = window as html.Window;
-  final doc = realWindow.document;
+  final doc = realWindow.document as html.HtmlDocument;
 
   final htmlContent = _buildReceiptHtml(receipt, name, logoUrl: logoUrl);
   doc.open();
@@ -38,7 +38,7 @@ Future<void> printReceiptText(String receipt, String name, {String? logoUrl}) as
   await Future<void>.delayed(const Duration(milliseconds: 300));
 
   try {
-    realWindow.focus();
+    iframe.focus();
     realWindow.print();
   } catch (e) {
     throw Exception('Erro ao disparar a janela de impressão: $e');

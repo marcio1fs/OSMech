@@ -19,27 +19,19 @@ Future<void> printReceiptText(String receipt, String name, {String? logoUrl}) as
 
   html.document.body?.append(iframe);
 
-  final window = iframe.contentWindow;
-  if (window == null) {
-    iframe.remove();
-    throw Exception('Não foi possível obter o contexto de impressão do navegador.');
-  }
-
-  // Cast para html.Window para acessar document, e depois para html.HtmlDocument
-  final realWindow = window as html.Window;
-  final doc = realWindow.document as html.HtmlDocument;
-
-  final htmlContent = _buildReceiptHtml(receipt, name, logoUrl: logoUrl);
-  doc.open();
-  doc.write(htmlContent);
-  doc.close();
+  iframe.srcdoc = _buildReceiptHtml(receipt, name, logoUrl: logoUrl);
 
   // Aguarda o carregamento do conteúdo no DOM do iframe
   await Future<void>.delayed(const Duration(milliseconds: 300));
 
   try {
     iframe.focus();
-    realWindow.print();
+    final window = iframe.contentWindow;
+    if (window is html.Window) {
+      window.print();
+    } else {
+      throw Exception('Não foi possível obter o contexto de impressão.');
+    }
   } catch (e) {
     throw Exception('Erro ao disparar a janela de impressão: $e');
   } finally {

@@ -178,4 +178,69 @@ class AuthService extends ChangeNotifier {
     await prefs.setString('nome', nome);
     notifyListeners();
   }
+
+  /// Envia e-mail de recuperação de senha.
+  Future<String?> forgotPassword(String email) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/forgot-password'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: ApiConfig.timeoutSeconds));
+
+      if (response.statusCode == 200) {
+        return null; // sucesso
+      } else {
+        final body = jsonDecode(response.body);
+        return body['error'] ?? 'Erro ao solicitar recuperação de senha';
+      }
+    } catch (e) {
+      return 'Erro de conexão: verifique sua internet';
+    }
+  }
+
+  /// Redefine a senha com o token de recuperação.
+  Future<String?> resetPassword(String token, String newPassword) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/reset-password'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': token, 'novaSenha': newPassword}),
+          )
+          .timeout(const Duration(seconds: ApiConfig.timeoutSeconds));
+
+      if (response.statusCode == 200) {
+        return null; // sucesso
+      } else {
+        final body = jsonDecode(response.body);
+        return body['error'] ?? 'Erro ao redefinir senha';
+      }
+    } catch (e) {
+      return 'Erro de conexão: verifique sua internet';
+    }
+  }
+
+  /// Verifica o e-mail do usuário com o token.
+  Future<String?> verifyEmail(String token) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-email?token=$token'),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: ApiConfig.timeoutSeconds));
+
+      if (response.statusCode == 200) {
+        return null; // sucesso
+      } else {
+        final body = jsonDecode(response.body);
+        return body['error'] ?? 'Erro ao verificar e-mail';
+      }
+    } catch (e) {
+      return 'Erro de conexão: verifique sua internet';
+    }
+  }
 }

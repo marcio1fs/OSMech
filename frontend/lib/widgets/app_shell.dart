@@ -425,7 +425,10 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildMobileLayout(AuthService auth) {
     return Scaffold(
-      body: _getPage(_selectedIndex),
+      body: SafeArea(
+        bottom: false,
+        child: _getPage(_selectedIndex),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex > 4 ? 4 : _selectedIndex,
         onDestinationSelected: (i) {

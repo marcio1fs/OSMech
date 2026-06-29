@@ -181,95 +181,87 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+            child: LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 600;
+
+              final titleAndBadge = Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText('Estoque',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('${_itens.length} itens cadastrados',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      UpperText('Estoque',
+                          style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary)),
+                      UpperText('${_itens.length} itens cadastrados',
+                          style: GoogleFonts.inter(
+                              fontSize: 13, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                  if (alertCount > 0) ...[
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: widget.onNavigateAlertas,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
+                            const SizedBox(width: 4),
+                            UpperText('$alertCount alertas',
+                                style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.warning)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
-                ),
-                if (alertCount > 0) ...[
-                  const SizedBox(width: 12),
-                  InkWell(
-                    onTap: widget.onNavigateAlertas,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: AppColors.warning.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              size: 16, color: AppColors.warning),
-                          const SizedBox(width: 4),
-                          UpperText('$alertCount alertas',
-                              style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.warning)),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
-                const SizedBox(width: 24),
+              );
 
-                // Busca
-                SizedBox(
-                  width: 220,
-                  height: 38,
-                  child: TextField(
-                    controller: _buscaCtrl,
-                    onSubmitted: (_) => _loadItens(),
-                    style: GoogleFonts.inter(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar peça...',
-                      hintStyle: GoogleFonts.inter(
-                          fontSize: 13, color: AppColors.textMuted),
-                      prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                      suffixIcon: _buscaCtrl.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: () {
-                                _buscaCtrl.clear();
-                                _loadItens();
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
+              final searchField = SizedBox(
+                height: 38,
+                child: TextField(
+                  controller: _buscaCtrl,
+                  onSubmitted: (_) => _loadItens(),
+                  style: GoogleFonts.inter(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar peça...',
+                    hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                    suffixIcon: _buscaCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () { _buscaCtrl.clear(); _loadItens(); },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
-                const SizedBox(width: 8),
+              );
 
-                // Filtro de categoria
-                Container(
-                  height: 38,
+              final categoryFilter = SizedBox(
+                width: 150,
+                height: 38,
+                child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceVariant,
@@ -278,10 +270,10 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
+                      isExpanded: true,
                       value: _filtroCategoria,
                       hint: UpperText('Categoria',
-                          style: GoogleFonts.inter(
-                              fontSize: 13, color: AppColors.textMuted)),
+                          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
                       items: _categorias
                           .map((c) => DropdownMenuItem(
                               value: c,
@@ -295,45 +287,59 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
                     ),
                   ),
                 ),
-                if (_filtroCategoria != null) ...[
-                  const SizedBox(width: 4),
+              );
+
+              final actionButtons = Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  searchField,
+                  categoryFilter,
+                  if (_filtroCategoria != null)
+                    IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      tooltip: 'Limpar filtro',
+                      onPressed: () {
+                        setState(() => _filtroCategoria = null);
+                        _loadItens();
+                      },
+                    ),
                   IconButton(
-                    icon: const Icon(Icons.clear_rounded, size: 18),
-                    tooltip: 'Limpar filtro',
-                    onPressed: () {
-                      setState(() => _filtroCategoria = null);
-                      _loadItens();
-                    },
+                    onPressed: _loading ? null : _loadItens,
+                    icon: _loading
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent))
+                        : const Icon(Icons.refresh_rounded, size: 20),
+                    tooltip: 'Atualizar lista',
+                  ),
+                  FilledButton.icon(
+                    onPressed: widget.onNavigateNovaPeca,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const UpperText('Nova Peça'),
                   ),
                 ],
-                const SizedBox(width: 12),
+              );
 
-                // Botão atualizar
-                IconButton(
-                  onPressed: _loading ? null : _loadItens,
-                  icon: _loading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.accent,
-                          ),
-                        )
-                      : const Icon(Icons.refresh_rounded, size: 20),
-                  tooltip: 'Atualizar lista',
-                ),
-                const SizedBox(width: 8),
+              if (compact) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  titleAndBadge,
+                  const SizedBox(height: 12),
+                  actionButtons,
+                ]);
+              }
 
-                FilledButton.icon(
-                  onPressed: widget.onNavigateNovaPeca,
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const UpperText('Nova Peça'),
-                ),
+              return Row(
+                children: [
+                  titleAndBadge,
+                  const SizedBox(width: 16),
+                  Expanded(child: actionButtons),
                 ],
-              ),
-            ),
+              );
+            }),
           ),
+
+
 
           // Table
           Expanded(

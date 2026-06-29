@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
+
 /**
  * DTO de resposta após login/cadastro bem-sucedido.
  */
@@ -17,4 +18,9 @@ public class AuthResponse {
     private String nome;
     private String role;
     private String plano;
+
+    // Campo opcional para compatibilidade com versões do código que esperam mensagem.
+    // Mantido como null por padrão.
+    private String message;
+
 }

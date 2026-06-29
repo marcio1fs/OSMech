@@ -100,7 +100,7 @@ class _SubscriptionPageState extends State<SubscriptionPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: UpperText(
-              'O plano Gratuito nao usa checkout. Para voltar ao FREE, cancele a assinatura atual.'),
+              'O plano Gratuito não usa checkout. Para voltar ao FREE, cancele a assinatura atual.'),
         ),
       );
       return;
@@ -168,45 +168,79 @@ class _SubscriptionPageState extends State<SubscriptionPage>
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 640;
+    final pagePadding = isCompact ? 16.0 : 32.0;
+
     return Container(
       color: AppColors.background,
       child: Column(
         children: [
-          // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: EdgeInsets.symmetric(horizontal: pagePadding, vertical: 14),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText('Minha Assinatura',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('Gerencie seu plano e pagamentos',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: _loadAssinatura,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const UpperText('Atualizar'),
-                ),
-              ],
-            ),
+            child: isCompact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      UpperText('Minha Assinatura',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary)),
+                      const SizedBox(height: 2),
+                      UpperText('Gerencie seu plano e pagamentos',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 13, color: AppColors.textSecondary)),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: _loadAssinatura,
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const UpperText('Atualizar'),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            UpperText('Minha Assinatura',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary)),
+                            UpperText('Gerencie seu plano e pagamentos',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                    fontSize: 13, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: _loadAssinatura,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const UpperText('Atualizar'),
+                      ),
+                    ],
+                  ),
           ),
 
-          // Content
           Expanded(
             child: _loading
                 ? const Center(
@@ -230,7 +264,7 @@ class _SubscriptionPageState extends State<SubscriptionPage>
                         ),
                       )
                     : SingleChildScrollView(
-                        padding: const EdgeInsets.all(32),
+                        padding: EdgeInsets.all(pagePadding),
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 700),
                           child: Column(
@@ -239,7 +273,7 @@ class _SubscriptionPageState extends State<SubscriptionPage>
                               // Status card
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(28),
+                                padding: EdgeInsets.all(isCompact ? 20 : 28),
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
                                   borderRadius: BorderRadius.circular(16),
@@ -264,8 +298,9 @@ class _SubscriptionPageState extends State<SubscriptionPage>
                                     const SizedBox(height: 16),
                                     UpperText(
                                       _assinatura?['planoNome'] ?? 'Sem plano',
+                                      textAlign: TextAlign.center,
                                       style: GoogleFonts.inter(
-                                          fontSize: 24,
+                                          fontSize: isCompact ? 20 : 24,
                                           fontWeight: FontWeight.w800,
                                           color: AppColors.textPrimary),
                                     ),
@@ -292,7 +327,7 @@ class _SubscriptionPageState extends State<SubscriptionPage>
                                     UpperText(
                                       '${formatCurrency(_assinatura?['valorMensal'] ?? 0)}/mês',
                                       style: GoogleFonts.inter(
-                                          fontSize: 28,
+                                          fontSize: isCompact ? 22 : 28,
                                           fontWeight: FontWeight.w800,
                                           color: AppColors.textPrimary),
                                     ),
@@ -304,7 +339,7 @@ class _SubscriptionPageState extends State<SubscriptionPage>
                               // Details card
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(24),
+                                padding: EdgeInsets.all(isCompact ? 18 : 24),
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
                                   borderRadius: BorderRadius.circular(14),
@@ -464,54 +499,67 @@ class _SubscriptionPageState extends State<SubscriptionPage>
                 color: isCurrent ? AppColors.success : AppColors.border,
                 width: isCurrent ? 2 : 1),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    UpperText(plano['nome'] as String,
+          child: LayoutBuilder(builder: (context, constraints) {
+            final info = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                UpperText(plano['nome'] as String,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+                UpperText(formatCurrency(plano['preco']),
+                    style: GoogleFonts.inter(
+                        fontSize: 14, color: AppColors.textSecondary)),
+              ],
+            );
+            final action = isCurrent
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: UpperText('Atual',
                         style: GoogleFonts.inter(
-                            fontSize: 16, fontWeight: FontWeight.w700)),
-                    UpperText(formatCurrency(plano['preco']),
-                        style: GoogleFonts.inter(
-                            fontSize: 14, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-              if (isCurrent)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: UpperText('Atual',
-                      style: GoogleFonts.inter(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12)),
-                )
-              else
-                FilledButton(
-                  onPressed: _processingPayment || plano['codigo'] == 'FREE'
-                      ? null
-                      : () => _assinarPlano(plano['codigo'] as String),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                  ),
-                  child: _processingPayment
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : UpperText(
-                          plano['codigo'] == 'FREE' ? 'Plano base' : 'Assinar'),
-                ),
-            ],
-          ),
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12)),
+                  )
+                : FilledButton(
+                    onPressed: _processingPayment || plano['codigo'] == 'FREE'
+                        ? null
+                        : () => _assinarPlano(plano['codigo'] as String),
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
+                    child: _processingPayment
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : UpperText(
+                            plano['codigo'] == 'FREE' ? 'Plano base' : 'Assinar'),
+                  );
+
+            if (constraints.maxWidth < 360) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  info,
+                  const SizedBox(height: 12),
+                  Align(alignment: Alignment.centerLeft, child: action),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: info),
+                const SizedBox(width: 12),
+                action,
+              ],
+            );
+          }),
         );
       }).toList(),
     );
@@ -537,11 +585,15 @@ class _DetailItem extends StatelessWidget {
               style: GoogleFonts.inter(
                   fontSize: 13, color: AppColors.textSecondary)),
           const SizedBox(width: 8),
-          UpperText(value,
-              style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary)),
+          Expanded(
+            child: UpperText(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary)),
+          ),
         ],
       ),
     );

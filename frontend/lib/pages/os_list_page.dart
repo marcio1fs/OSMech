@@ -161,342 +161,412 @@ class _OsListPageState extends State<OsListPage> with AuthErrorMixin {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.background,
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          UpperText(
-                            'Ordens de Serviço',
-                            style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary),
-                          ),
-                          const SizedBox(height: 2),
-                          UpperText(
-                            '${_ordens.length} registro(s)',
-                            style: GoogleFonts.inter(
-                                fontSize: 13, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _loadOrdens,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const UpperText('Atualizar'),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      onPressed: () async {
-                        await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const OsFormPage()));
-                        _loadOrdens();
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const UpperText('Nova OS'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Search and filter
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: TextField(
-                        onChanged: (v) => setState(() {
-                          _searchQuery = v;
-                          _applyFilters();
-                        }),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar por cliente, placa ou modelo...',
-                          prefixIcon:
-                              const Icon(Icons.search_rounded, size: 20),
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 12),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border)),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border)),
-                          filled: true,
-                          fillColor: AppColors.surfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<String>(
-                        value: _statusFilter,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border)),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border)),
-                          filled: true,
-                          fillColor: AppColors.surfaceVariant,
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'TODOS', child: UpperText('Todos')),
-                          DropdownMenuItem(
-                              value: 'ABERTA', child: UpperText('Aberta')),
-                          DropdownMenuItem(
-                              value: 'EM_ANDAMENTO',
-                              child: UpperText('Em Andamento')),
-                          DropdownMenuItem(
-                              value: 'AGUARDANDO_PECA',
-                              child: UpperText('Ag. Peça')),
-                          DropdownMenuItem(
-                              value: 'AGUARDANDO_APROVACAO',
-                              child: UpperText('Ag. Aprovação')),
-                          DropdownMenuItem(
-                              value: 'CONCLUIDA', child: UpperText('Concluída')),
-                          DropdownMenuItem(
-                              value: 'CANCELADA', child: UpperText('Cancelada')),
-                        ],
-                        selectedItemBuilder: (context) => const [
-                          UpperText('Todos',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          UpperText('Aberta',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          UpperText('Em Andamento',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          UpperText('Ag. Peca',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          UpperText('Ag. Aprovacao',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          UpperText('Concluida',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          UpperText('Cancelada',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ],
-                        onChanged: (v) => setState(() {
-                          _statusFilter = v ?? 'TODOS';
-                          _applyFilters();
-                        }),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
 
-          // Content
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.accent))
-                : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.error_outline_rounded,
-                                size: 48, color: AppColors.error),
-                            const SizedBox(height: 12),
-                            UpperText(_error!,
-                                style: GoogleFonts.inter(
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                                onPressed: _loadOrdens,
-                                child: const UpperText('Tentar novamente')),
-                          ],
-                        ),
-                      )
-                    : _filtered.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.inbox_rounded,
-                                    size: 56, color: AppColors.textMuted),
-                                const SizedBox(height: 12),
-                                UpperText('Nenhuma OS encontrada',
-                                    style: GoogleFonts.inter(
-                                        fontSize: 15,
-                                        color: AppColors.textSecondary)),
-                              ],
-                            ),
-                          )
-                        : SingleChildScrollView(
-                            padding: const EdgeInsets.all(32),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    headingRowColor: WidgetStateProperty.all(
-                                        AppColors.surfaceVariant),
-                                    headingTextStyle: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textSecondary),
-                                    dataTextStyle: GoogleFonts.inter(
-                                        fontSize: 13,
-                                        color: AppColors.textPrimary),
-                                    columnSpacing: 24,
-                                    horizontalMargin: 20,
-                                    columns: const [
-                                      DataColumn(label: UpperText('CLIENTE')),
-                                      DataColumn(label: UpperText('VEÍCULO')),
-                                      DataColumn(label: UpperText('PLACA')),
-                                      DataColumn(label: UpperText('STATUS')),
-                                      DataColumn(
-                                          label: UpperText('VALOR'), numeric: true),
-                                      DataColumn(label: UpperText('AÇÕES')),
-                                    ],
-                                    rows: _filtered.map((os) {
-                                      final status = os['status'] ?? 'ABERTA';
-                                      final color = _statusColor(status);
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(UpperText(
-                                              os['clienteNome'] ?? '-',
-                                              style: GoogleFonts.inter(
-                                                  fontWeight:
-                                                      FontWeight.w600))),
-                                          DataCell(UpperText(
-                                              '${os['modelo'] ?? '-'} ${os['ano'] ?? ''}'
-                                                  .trim())),
-                                          DataCell(UpperText(os['placa'] ?? '-',
-                                              style: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 0.5))),
-                                          DataCell(
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: color.withValues(
-                                                    alpha: 0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                              ),
-                                              child: UpperText(
-                                                _statusLabel(status),
-                                                style: GoogleFonts.inter(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: color),
-                                              ),
-                                            ),
-                                          ),
-                                          DataCell(UpperText(
-                                            formatCurrency(os['valor'] ?? 0),
-                                            style: GoogleFonts.inter(
-                                                fontWeight: FontWeight.w700),
-                                          )),
-                                          DataCell(
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.visibility_outlined,
-                                                      size: 18,
-                                                      color: AppColors
-                                                          .accent),
-                                                  onPressed: () async {
-                                                    final result = await Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                            builder: (_) =>
-                                                                OsDetailPage(
-                                                                    osData:
-                                                                        os)));
-                                                    if (result != null) {
-                                                      _loadOrdens();
-                                                    }
-                                                  },
-                                                  tooltip: 'Ver Detalhes',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.edit_outlined,
-                                                      size: 18,
-                                                      color: AppColors
-                                                          .textSecondary),
-                                                  onPressed: () async {
-                                                    await Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                            builder: (_) =>
-                                                                OsFormPage(
-                                                                    osData:
-                                                                        os)));
-                                                    _loadOrdens();
-                                                  },
-                                                  tooltip: 'Editar',
-                                                ),
-                                                IconButton(
-                                                  icon: Icon(
-                                                      Icons
-                                                          .delete_outline_rounded,
-                                                      size: 18,
-                                                      color: _deleting
-                                                          ? AppColors.textMuted
-                                                          : AppColors.error),
-                                                  onPressed: _deleting
-                                                      ? null
-                                                      : () => _excluirOs(os),
-                                                  tooltip: 'Excluir',
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+  Future<void> _abrirNovaOs() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OsFormPage()),
+    );
+    if (!mounted) return;
+    _loadOrdens();
+  }
+
+  Future<void> _abrirDetalhes(Map<String, dynamic> os) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OsDetailPage(osData: os)),
+    );
+    if (!mounted) return;
+    if (result != null) _loadOrdens();
+  }
+
+  Future<void> _abrirEdicao(Map<String, dynamic> os) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OsFormPage(osData: os)),
+    );
+    if (!mounted) return;
+    _loadOrdens();
+  }
+
+  Widget _buildStatusChip(String status) {
+    final color = _statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: UpperText(
+        _statusLabel(status),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOsCard(Map<String, dynamic> os) {
+    final status = (os['status'] ?? 'ABERTA').toString();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    UpperText(
+                      os['clienteNome'] ?? '-',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    UpperText(
+                      '${os['modelo'] ?? '-'} ${os['ano'] ?? ''}'.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildStatusChip(status),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: UpperText(
+                  'Placa: ${os['placa'] ?? '-'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ),
+              UpperText(
+                formatCurrency(os['valor'] ?? 0),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _abrirDetalhes(os),
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  label: const UpperText('Ver'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _abrirEdicao(os),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const UpperText('Editar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _deleting ? null : () => _excluirOs(os),
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: _deleting ? AppColors.textMuted : AppColors.error,
+                ),
+                tooltip: 'Excluir',
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 640;
+    final pagePadding = isCompact ? 16.0 : 32.0;
+
+    Widget searchAndFilter() {
+      final search = TextField(
+        onChanged: (v) {
+          if (!mounted) return;
+          setState(() {
+            _searchQuery = v;
+            _applyFilters();
+          });
+        },
+        decoration: InputDecoration(
+          hintText: isCompact ? 'Buscar OS...' : 'Buscar por cliente, placa ou modelo...',
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          filled: true,
+          fillColor: AppColors.surfaceVariant,
+        ),
+      );
+
+      final filter = DropdownButtonFormField<String>(
+        value: _statusFilter,
+        isExpanded: true,
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          filled: true,
+          fillColor: AppColors.surfaceVariant,
+        ),
+        items: const [
+          DropdownMenuItem(value: 'TODOS', child: UpperText('Todos')),
+          DropdownMenuItem(value: 'ABERTA', child: UpperText('Aberta')),
+          DropdownMenuItem(value: 'EM_ANDAMENTO', child: UpperText('Em Andamento')),
+          DropdownMenuItem(value: 'AGUARDANDO_PECA', child: UpperText('Ag. Peca')),
+          DropdownMenuItem(value: 'AGUARDANDO_APROVACAO', child: UpperText('Ag. Aprovacao')),
+          DropdownMenuItem(value: 'CONCLUIDA', child: UpperText('Concluida')),
+          DropdownMenuItem(value: 'CANCELADA', child: UpperText('Cancelada')),
+        ],
+        onChanged: (v) {
+          if (!mounted) return;
+          setState(() {
+            _statusFilter = v ?? 'TODOS';
+            _applyFilters();
+          });
+        },
+      );
+
+      if (isCompact) {
+        return Column(children: [
+          search,
+          const SizedBox(height: 10),
+          filter,
+        ]);
+      }
+
+      return Row(children: [
+        Expanded(flex: 3, child: search),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: filter),
+      ]);
+    }
+
+    Widget content() {
+      if (_loading) {
+        return const Center(child: CircularProgressIndicator(color: AppColors.accent));
+      }
+      if (_error != null) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+              const SizedBox(height: 12),
+              UpperText(_error!, style: GoogleFonts.inter(color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: _loadOrdens, child: const UpperText('Tentar novamente')),
+            ],
+          ),
+        );
+      }
+      if (_filtered.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.inbox_rounded, size: 56, color: AppColors.textMuted),
+              const SizedBox(height: 12),
+              UpperText('Nenhuma OS encontrada',
+                  style: GoogleFonts.inter(fontSize: 15, color: AppColors.textSecondary)),
+            ],
+          ),
+        );
+      }
+
+      if (isCompact) {
+        return ListView.separated(
+          padding: EdgeInsets.fromLTRB(pagePadding, 16, pagePadding, 24),
+          itemCount: _filtered.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, index) => _buildOsCard(_filtered[index]),
+        );
+      }
+
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(pagePadding),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(AppColors.surfaceVariant),
+                headingTextStyle: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+                dataTextStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+                columnSpacing: 24,
+                horizontalMargin: 20,
+                columns: const [
+                  DataColumn(label: UpperText('CLIENTE')),
+                  DataColumn(label: UpperText('VEICULO')),
+                  DataColumn(label: UpperText('PLACA')),
+                  DataColumn(label: UpperText('STATUS')),
+                  DataColumn(label: UpperText('VALOR'), numeric: true),
+                  DataColumn(label: UpperText('ACOES')),
+                ],
+                rows: _filtered.map((os) {
+                  final status = (os['status'] ?? 'ABERTA').toString();
+                  return DataRow(cells: [
+                    DataCell(UpperText(os['clienteNome'] ?? '-',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
+                    DataCell(UpperText('${os['modelo'] ?? '-'} ${os['ano'] ?? ''}'.trim())),
+                    DataCell(UpperText(os['placa'] ?? '-',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, letterSpacing: 0.5))),
+                    DataCell(_buildStatusChip(status)),
+                    DataCell(UpperText(formatCurrency(os['valor'] ?? 0),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700))),
+                    DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                        icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.accent),
+                        onPressed: () => _abrirDetalhes(os),
+                        tooltip: 'Ver Detalhes',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+                        onPressed: () => _abrirEdicao(os),
+                        tooltip: 'Editar',
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline_rounded,
+                            size: 18,
+                            color: _deleting ? AppColors.textMuted : AppColors.error),
+                        onPressed: _deleting ? null : () => _excluirOs(os),
+                        tooltip: 'Excluir',
+                      ),
+                    ])),
+                  ]);
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: AppColors.background,
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: pagePadding, vertical: 14),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: isCompact ? double.infinity : 260,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          UpperText(
+                            'Ordens de Servico',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          UpperText(
+                            '${_ordens.length} registro(s)',
+                            style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      OutlinedButton.icon(
+                        onPressed: _loadOrdens,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const UpperText('Atualizar'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: _abrirNovaOs,
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const UpperText('Nova OS'),
+                      ),
+                    ]),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                searchAndFilter(),
+              ],
+            ),
+          ),
+          Expanded(child: content()),
+        ],
+      ),
+    );
+  }
+
 }

@@ -223,7 +223,8 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           UpperText('Cliente:', style: GoogleFonts.inter(color: AppColors.textSecondary)),
-                          UpperText(_os['clienteNome'] ?? '-', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 8),
+                          Flexible(child: UpperText(_os['clienteNome'] ?? '-', style: GoogleFonts.inter(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, textAlign: TextAlign.end)),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -231,7 +232,8 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           UpperText('Veículo:', style: GoogleFonts.inter(color: AppColors.textSecondary)),
-                          UpperText('${_os['modelo'] ?? '-'} (${_os['placa'] ?? '-'})', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 8),
+                          Flexible(child: UpperText('${_os['modelo'] ?? '-'} (${_os['placa'] ?? '-'})', style: GoogleFonts.inter(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, textAlign: TextAlign.end)),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -249,8 +251,9 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                       if (descontoPerc > 0) ...[
                         const SizedBox(height: 4),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          UpperText('Desconto (${descontoPerc.toStringAsFixed(0)}%):',
-                              style: GoogleFonts.inter(color: AppColors.error, fontSize: 13)),
+                          Flexible(child: UpperText('Desconto (${descontoPerc.toStringAsFixed(0)}%):',
+                              style: GoogleFonts.inter(color: AppColors.error, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
                           UpperText(
                             '- ${formatCurrency(((_os['valor'] ?? 0) as num).toDouble() * descontoPerc / 100)}',
                             style: GoogleFonts.inter(color: AppColors.error, fontSize: 13),
@@ -260,10 +263,13 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                           UpperText('Valor final:',
                               style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                          UpperText(
+                          const SizedBox(width: 8),
+                          Flexible(child: UpperText(
                             formatCurrency(((_os['valor'] ?? 0) as num).toDouble() * (1 - descontoPerc / 100)),
                             style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.success, fontSize: 16),
-                          ),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          )),
                         ]),
                       ],
                     ],
@@ -810,13 +816,14 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                             onPressed: () async {
                               try {
                                 final osService = OsService(token: safeToken);
-                                final results = await Future.wait([
+                                final results = await Future.wait<dynamic>([
                                   osService.obterRecibo(_os['id']),
                                   _buscarLogoUrl(),
                                 ]);
                                 if (!mounted) return;
                                 _logoUrl = results[1] as String?;
                                 _mostrarRecibo(results[0] as String, false, logoUrl: _logoUrl);
+
                               } catch (e) {
                                 if (!mounted) return;
                                 _logoUrl ??= await _buscarLogoUrl();

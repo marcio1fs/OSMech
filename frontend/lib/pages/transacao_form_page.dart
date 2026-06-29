@@ -122,218 +122,226 @@ class _TransacaoFormPageState extends State<TransacaoFormPage>
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText('Novo Lançamento',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('Registre uma entrada ou saída financeira',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
+                UpperText('Novo Lançamento',
+                    style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis),
+                UpperText('Registre uma entrada ou saída financeira',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
 
           // Form content
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 640),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Tipo selector
-                        UpperText('Tipo de Lançamento',
-                            style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary)),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _TipoButton(
-                                label: 'Entrada',
-                                icon: Icons.arrow_downward_rounded,
-                                color: AppColors.success,
-                                selected: _tipo == 'ENTRADA',
-                                onTap: () => setState(() {
-                                  _tipo = 'ENTRADA';
-                                  _categoriaId = null;
-                                }),
+            child: LayoutBuilder(builder: (context, constraints) {
+              final hPad = constraints.maxWidth < 560 ? 16.0 : 32.0;
+              return SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 24),
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Tipo selector
+                          UpperText('Tipo de Lançamento',
+                              style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _TipoButton(
+                                  label: 'Entrada',
+                                  icon: Icons.arrow_downward_rounded,
+                                  color: AppColors.success,
+                                  selected: _tipo == 'ENTRADA',
+                                  onTap: () => setState(() {
+                                    _tipo = 'ENTRADA';
+                                    _categoriaId = null;
+                                  }),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _TipoButton(
-                                label: 'Saída',
-                                icon: Icons.arrow_upward_rounded,
-                                color: AppColors.error,
-                                selected: _tipo == 'SAIDA',
-                                onTap: () => setState(() {
-                                  _tipo = 'SAIDA';
-                                  _categoriaId = null;
-                                }),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _TipoButton(
+                                  label: 'Saída',
+                                  icon: Icons.arrow_upward_rounded,
+                                  color: AppColors.error,
+                                  selected: _tipo == 'SAIDA',
+                                  onTap: () => setState(() {
+                                    _tipo = 'SAIDA';
+                                    _categoriaId = null;
+                                  }),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
 
-                        // Descrição
-                        _buildLabel('Descrição *'),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _descricaoController,
-                          decoration:
-                              _inputDecoration('Ex: Serviço de alinhamento'),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Obrigatório'
-                              : null,
-                        ),
-                        const SizedBox(height: 20),
+                          // Descrição
+                          _buildLabel('Descrição *'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _descricaoController,
+                            decoration:
+                                _inputDecoration('Ex: Serviço de alinhamento'),
+                            validator: (v) => v == null || v.trim().isEmpty
+                                ? 'Obrigatório'
+                                : null,
+                          ),
+                          const SizedBox(height: 20),
 
-                        // Valor
-                        _buildLabel('Valor (R\$) *'),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _valorController,
-                          decoration: _inputDecoration('0,00'),
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'[\d,.]')),
-                          ],
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Obrigatório';
-                            }
-                            final parsed = double.tryParse(v
-                                .replaceAll('R\$', '')
-                                .replaceAll('.', '')
-                                .replaceAll(',', '.')
-                                .trim());
-                            if (parsed == null || parsed <= 0) {
-                              return 'Valor deve ser positivo';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
+                          // Valor
+                          _buildLabel('Valor (R\$) *'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _valorController,
+                            decoration: _inputDecoration('0,00'),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[\d,.]')),
+                            ],
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Obrigatório';
+                              }
+                              final parsed = double.tryParse(v
+                                  .replaceAll('R\$', '')
+                                  .replaceAll('.', '')
+                                  .replaceAll(',', '.')
+                                  .trim());
+                              if (parsed == null || parsed <= 0) {
+                                return 'Valor deve ser positivo';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
 
-                        // Categoria
-                        _buildLabel('Categoria'),
-                        const SizedBox(height: 8),
-                        _loadingCategorias
-                            ? const LinearProgressIndicator()
-                            : DropdownButtonFormField<int>(
-                                value: _categoriaId,
-                                decoration: _inputDecoration('Selecione...'),
-                                isExpanded: true,
-                                items: [
-                                  const DropdownMenuItem<int>(
-                                    value: null,
-                                    child: UpperText('Sem categoria'),
-                                  ),
-                                  ..._categoriasFiltradas
-                                      .map((c) => DropdownMenuItem<int>(
-                                            value: c['id'] as int,
-                                            child: UpperText(c['nome'] ?? ''),
-                                          )),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _categoriaId = v),
+                          // Categoria
+                          _buildLabel('Categoria'),
+                          const SizedBox(height: 8),
+                          _loadingCategorias
+                              ? const LinearProgressIndicator()
+                              : DropdownButtonFormField<int>(
+                                  value: _categoriaId,
+                                  decoration: _inputDecoration('Selecione...'),
+                                  isExpanded: true,
+                                  items: [
+                                    const DropdownMenuItem<int>(
+                                      value: null,
+                                      child: UpperText(
+                                        'Sem categoria',
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                    ..._categoriasFiltradas
+                                        .map((c) => DropdownMenuItem<int>(
+                                              value: c['id'] as int,
+                                              child: UpperText(
+                                                c['nome'] ?? '',
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1,
+                                              ),
+                                            )),
+                                  ],
+                                  onChanged: (v) =>
+                                      setState(() => _categoriaId = v),
+                                ),
+                          const SizedBox(height: 20),
+
+                          // Método de Pagamento
+                          _buildLabel('Método de Pagamento'),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _metodoPagamento,
+                            decoration: _inputDecoration(''),
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'DINHEIRO', child: UpperText('Dinheiro')),
+                              DropdownMenuItem(value: 'PIX', child: UpperText('PIX')),
+                              DropdownMenuItem(
+                                  value: 'CARTAO', child: UpperText('Cartão')),
+                              DropdownMenuItem(
+                                  value: 'BOLETO', child: UpperText('Boleto')),
+                              DropdownMenuItem(
+                                  value: 'TRANSFERENCIA',
+                                  child: UpperText('Transferência')),
+                              DropdownMenuItem(
+                                  value: 'OUTRO', child: UpperText('Outro')),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _metodoPagamento = v!),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Observações
+                          _buildLabel('Observações'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _observacoesController,
+                            decoration:
+                                _inputDecoration('Observações opcionais...'),
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Submit button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: FilledButton.icon(
+                              onPressed: _saving ? null : _salvar,
+                              icon: _saving
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.save_rounded, size: 20),
+                              label: UpperText(_saving
+                                  ? 'Salvando...'
+                                  : 'Registrar Lançamento'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _tipo == 'ENTRADA'
+                                    ? AppColors.success
+                                    : AppColors.error,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                textStyle: GoogleFonts.inter(
+                                    fontSize: 15, fontWeight: FontWeight.w600),
                               ),
-                        const SizedBox(height: 20),
-
-                        // Método de Pagamento
-                        _buildLabel('Método de Pagamento'),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: _metodoPagamento,
-                          decoration: _inputDecoration(''),
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'DINHEIRO', child: UpperText('Dinheiro')),
-                            DropdownMenuItem(value: 'PIX', child: UpperText('PIX')),
-                            DropdownMenuItem(
-                                value: 'CARTAO', child: UpperText('Cartão')),
-                            DropdownMenuItem(
-                                value: 'BOLETO', child: UpperText('Boleto')),
-                            DropdownMenuItem(
-                                value: 'TRANSFERENCIA',
-                                child: UpperText('Transferência')),
-                            DropdownMenuItem(
-                                value: 'OUTRO', child: UpperText('Outro')),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _metodoPagamento = v!),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Observações
-                        _buildLabel('Observações'),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _observacoesController,
-                          decoration:
-                              _inputDecoration('Observações opcionais...'),
-                          maxLines: 3,
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Submit button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: FilledButton.icon(
-                            onPressed: _saving ? null : _salvar,
-                            icon: _saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white))
-                                : const Icon(Icons.save_rounded, size: 20),
-                            label: UpperText(_saving
-                                ? 'Salvando...'
-                                : 'Registrar Lançamento'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: _tipo == 'ENTRADA'
-                                  ? AppColors.success
-                                  : AppColors.error,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              textStyle: GoogleFonts.inter(
-                                  fontSize: 15, fontWeight: FontWeight.w600),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           ),
         ],
       ),

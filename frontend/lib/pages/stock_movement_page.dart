@@ -155,22 +155,25 @@ class _StockMovementPageState extends State<StockMovementPage>
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(
               children: [
-                UpperText('Movimentação de Estoque',
-                    style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
+                Expanded(
+                  child: UpperText('Movimentação de Estoque',
+                      style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                ),
               ],
             ),
           ),
+
 
           Expanded(
             child: _loading
@@ -228,7 +231,8 @@ class _StockMovementPageState extends State<StockMovementPage>
                             child: _buildMovimentacoes(),
                           );
                           return SingleChildScrollView(
-                            padding: const EdgeInsets.all(32),
+                            padding: EdgeInsets.all(constraints.maxWidth < 560 ? 16 : 32),
+
                             child: isWide
                                 ? Row(
                                     crossAxisAlignment:
@@ -338,14 +342,20 @@ class _StockMovementPageState extends State<StockMovementPage>
               const SizedBox(width: 16),
               Expanded(
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   value: _motivo,
                   decoration: const InputDecoration(
                     labelText: 'Motivo',
                     prefixIcon: Icon(Icons.info_outline_rounded),
                   ),
                   items: _motivosAtuais.entries
-                      .map((e) =>
-                          DropdownMenuItem(value: e.key, child: UpperText(e.value)))
+                      .map((e) => DropdownMenuItem(
+                          value: e.key,
+                          child: UpperText(
+                            e.value,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          )))
                       .toList(),
                   onChanged: (v) => setState(() => _motivo = v!),
                 ),

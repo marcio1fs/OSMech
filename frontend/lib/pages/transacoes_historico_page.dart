@@ -162,79 +162,108 @@ class _TransacoesHistoricoPageState extends State<TransacoesHistoricoPage>
   @override
   Widget build(BuildContext context) {
     return Container(
+
       color: AppColors.background,
       child: Column(
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText('Histórico de Transações',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('${_transacoes.length} transações encontradas',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
-                const Spacer(),
+            child: LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
 
-                // Filtro de tipo
-                Container(
-                  height: 38,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _filtroTipo,
-                      hint: UpperText('Tipo',
-                          style: GoogleFonts.inter(
-                              fontSize: 13, color: AppColors.textMuted)),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'ENTRADA', child: UpperText('Entradas')),
-                        DropdownMenuItem(value: 'SAIDA', child: UpperText('Saídas')),
-                      ],
-                      onChanged: (v) {
-                        setState(() => _filtroTipo = v);
-                        _loadTransacoes();
-                      },
+              final title = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  UpperText('Histórico de Transações',
+                      style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                  UpperText('Acompanhe as entradas, saídas e estornos',
+                      style: GoogleFonts.inter(
+                          fontSize: 13, color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis),
+                ],
+              );
+
+              final actions = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  // Filtro de tipo
+                  SizedBox(
+                    width: 130,
+                    height: 38,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: _filtroTipo,
+                          hint: UpperText('Tipo',
+                              style: GoogleFonts.inter(
+                                  fontSize: 13, color: AppColors.textMuted)),
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'ENTRADA', child: UpperText('Entradas')),
+                            DropdownMenuItem(value: 'SAIDA', child: UpperText('Saídas')),
+                          ],
+                          onChanged: (v) {
+                            setState(() => _filtroTipo = v);
+                            _loadTransacoes();
+                          },
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _selecionarPeriodo,
-                  icon: const Icon(Icons.date_range_rounded, size: 18),
-                  label: const UpperText('Período'),
-                ),
-                if (_filtroTipo != null || _dataInicio != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _limparFiltros,
-                    icon: const Icon(Icons.clear_rounded, size: 20),
-                    tooltip: 'Limpar filtros',
+                  OutlinedButton.icon(
+                    onPressed: _selecionarPeriodo,
+                    icon: const Icon(Icons.date_range_rounded, size: 18),
+                    label: const UpperText('Período'),
                   ),
+                  if (_filtroTipo != null || _dataInicio != null)
+                    IconButton(
+                      onPressed: _limparFiltros,
+                      icon: const Icon(Icons.clear_rounded, size: 20),
+                      tooltip: 'Limpar filtros',
+                    ),
                 ],
-              ],
-            ),
+              );
+
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: 12),
+                    actions,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: title),
+                  const SizedBox(width: 16),
+                  actions,
+                ],
+              );
+            }),
           ),
+
+
 
           // Content
           Expanded(
@@ -282,7 +311,7 @@ class _TransacoesHistoricoPageState extends State<TransacoesHistoricoPage>
                             ),
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.all(32),
+                            padding: const EdgeInsets.all(24),
                             itemCount: _transacoes.length,
                             itemBuilder: (context, index) {
                               final tx = _transacoes[index];

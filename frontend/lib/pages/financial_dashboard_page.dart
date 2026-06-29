@@ -79,40 +79,96 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 860;
+
+                if (isCompact) {
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    alignment: WrapAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: (constraints.maxWidth - 64).clamp(0, double.infinity),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            UpperText('Dashboard Financeiro',
+                                style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary)),
+                            UpperText('Visão geral das finanças da oficina',
+                                style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: widget.onNavigateNovaTransacao,
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const UpperText('Novo Lançamento'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _loadData,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const UpperText('Atualizar'),
+                      ),
+                    ],
+                  );
+                }
+
+                // Sem Row no header: usar Wrap sempre evita RenderFlex overflow no Web.
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.start,
                   children: [
-                    UpperText('Dashboard Financeiro',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('Visão geral das finanças da oficina',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
+                    SizedBox(
+                      width: (constraints.maxWidth - 64).clamp(0, double.infinity),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          UpperText('Dashboard Financeiro',
+                              style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary)),
+                          UpperText('Visão geral das finanças da oficina',
+                              style: GoogleFonts.inter(
+                                  fontSize: 13, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: widget.onNavigateNovaTransacao,
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const UpperText('Novo Lançamento'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _loadData,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const UpperText('Atualizar'),
+                    ),
                   ],
-                ),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: widget.onNavigateNovaTransacao,
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const UpperText('Novo Lançamento'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _loadData,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const UpperText('Atualizar'),
-                ),
-              ],
+                );
+              },
             ),
           ),
 
@@ -254,11 +310,12 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              UpperText('Últimas Transações',
+              Flexible(child: UpperText('Últimas Transações',
                   style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
+                      color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis)),
               TextButton(
                 onPressed: widget.onNavigateTransacoes,
                 child: UpperText('Ver todas',
@@ -528,9 +585,11 @@ class _IndicatorRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        UpperText(label,
+        Flexible(child: UpperText(label,
             style: GoogleFonts.inter(
-                fontSize: 14, color: AppColors.textSecondary)),
+                fontSize: 14, color: AppColors.textSecondary),
+            overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 8),
         UpperText(value,
             style: GoogleFonts.inter(
                 fontSize: 15,

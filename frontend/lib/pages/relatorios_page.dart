@@ -239,95 +239,109 @@ class _RelatoriosPageState extends State<RelatoriosPage>
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: const BoxDecoration(
                 color: AppColors.surface,
                 border: Border(bottom: BorderSide(color: AppColors.border)),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: LayoutBuilder(builder: (context, constraints) {
+                final compact = constraints.maxWidth < 600;
+
+                final exportButton = PopupMenuButton<String>(
+                  tooltip: 'Exportar (Ctrl+E = PDF)',
+                  enabled: !_loading && !_exportando,
+                  onSelected: _exportarRelatorio,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'pdf', child: ListTile(
+                      leading: Icon(Icons.picture_as_pdf_outlined),
+                      title: UpperText('Exportar PDF'),
+                      contentPadding: EdgeInsets.zero,
+                    )),
+                    PopupMenuItem(value: 'excel', child: ListTile(
+                      leading: Icon(Icons.table_chart_outlined),
+                      title: UpperText('Exportar Excel'),
+                      contentPadding: EdgeInsets.zero,
+                    )),
+                    PopupMenuItem(value: 'csv', child: ListTile(
+                      leading: Icon(Icons.description_outlined),
+                      title: UpperText('Exportar CSV'),
+                      contentPadding: EdgeInsets.zero,
+                    )),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        UpperText('Relatórios',
-                            style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        const SizedBox(height: 2),
-                        UpperText(
-                          '${formatDateBR(_dataInicio)} – ${formatDateBR(_dataFim)}  •  F5 atualizar  •  Ctrl+E exportar PDF  •  Ctrl+P período  •  Ctrl+1-4 abas',
-                          style: GoogleFonts.inter(
-                              fontSize: 11, color: AppColors.textMuted),
-                        ),
+                        if (_exportando)
+                          const SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        else
+                          const Icon(Icons.download_rounded, size: 18, color: Colors.white),
+                        const SizedBox(width: 8),
+                        UpperText(_exportando ? 'Exportando...' : 'Exportar',
+                            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _selecionarPeriodo,
-                    icon: const Icon(Icons.calendar_today, size: 18),
-                    label: const UpperText('Período'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
+                );
+
+                final title = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    UpperText('Relatórios',
+                        style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    const SizedBox(height: 2),
+                    UpperText(
+                      '${formatDateBR(_dataInicio)} – ${formatDateBR(_dataFim)}',
+                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.textMuted),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: _loading ? null : _carregarRelatorios,
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 18, height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.refresh, size: 18),
-                    label: const UpperText('F5'),
-                  ),
-                  const SizedBox(width: 12),
-                  PopupMenuButton<String>(
-                    tooltip: 'Exportar (Ctrl+E = PDF)',
-                    enabled: !_loading && !_exportando,
-                    onSelected: _exportarRelatorio,
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'pdf', child: ListTile(
-                        leading: Icon(Icons.picture_as_pdf_outlined),
-                        title: UpperText('Exportar PDF'),
-                        contentPadding: EdgeInsets.zero,
-                      )),
-                      PopupMenuItem(value: 'excel', child: ListTile(
-                        leading: Icon(Icons.table_chart_outlined),
-                        title: UpperText('Exportar Excel'),
-                        contentPadding: EdgeInsets.zero,
-                      )),
-                      PopupMenuItem(value: 'csv', child: ListTile(
-                        leading: Icon(Icons.description_outlined),
-                        title: UpperText('Exportar CSV'),
-                        contentPadding: EdgeInsets.zero,
-                      )),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_exportando)
-                            const SizedBox(width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          else
-                            const Icon(Icons.download_rounded, size: 18, color: Colors.white),
-                          const SizedBox(width: 8),
-                          UpperText(_exportando ? 'Exportando...' : 'Exportar',
-                              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
+                  ],
+                );
+
+                final actions = Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _selecionarPeriodo,
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: const UpperText('Período'),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.textPrimary),
                     ),
-                  ),
-                ],
-              ),
+                    FilledButton.icon(
+                      onPressed: _loading ? null : _carregarRelatorios,
+                      icon: _loading
+                          ? const SizedBox(width: 18, height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.refresh, size: 18),
+                      label: const UpperText('F5'),
+                    ),
+                    exportButton,
+                  ],
+                );
+
+                if (compact) {
+                  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    title, const SizedBox(height: 12), actions,
+                  ]);
+                }
+                return Row(children: [
+                  Expanded(child: title),
+                  const SizedBox(width: 16),
+                  actions,
+                ]);
+              }),
             ),
+
             // Tabs
             Container(
               color: AppColors.surface,

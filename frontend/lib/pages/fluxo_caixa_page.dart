@@ -88,6 +88,8 @@ class _FluxoCaixaPageState extends State<FluxoCaixaPage> with AuthErrorMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     // Totais do período
     double totalEntradas = 0;
     double totalSaidas = 0;
@@ -103,43 +105,82 @@ class _FluxoCaixaPageState extends State<FluxoCaixaPage> with AuthErrorMixin {
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText('Fluxo de Caixa',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText(
-                        '${formatDateBR(_formatDate(_inicio))} a ${formatDateBR(_formatDate(_fim))}',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: _selecionarPeriodo,
-                  icon: const Icon(Icons.date_range_rounded, size: 18),
-                  label: const UpperText('Período'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _loadFluxo,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const UpperText('Atualizar'),
-                ),
-              ],
-            ),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      UpperText('Fluxo de Caixa Diário',
+                          style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary),
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      UpperText('Resumo de entradas e saídas por dia',
+                          style: GoogleFonts.inter(
+                              fontSize: 13, color: AppColors.textSecondary),
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _selecionarPeriodo,
+                              icon: const Icon(Icons.date_range_rounded, size: 18),
+                              label: const UpperText('Período'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _loadFluxo,
+                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              label: const UpperText('Atualizar'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            UpperText('Fluxo de Caixa Diário',
+                                style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary),
+                                overflow: TextOverflow.ellipsis),
+                            UpperText('Resumo de entradas e saídas por dia',
+                                style: GoogleFonts.inter(
+                                    fontSize: 13, color: AppColors.textSecondary),
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      OutlinedButton.icon(
+                        onPressed: _selecionarPeriodo,
+                        icon: const Icon(Icons.date_range_rounded, size: 18),
+                        label: const UpperText('Período'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _loadFluxo,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const UpperText('Atualizar'),
+                      ),
+                    ],
+                  ),
           ),
 
           // Content
@@ -169,48 +210,73 @@ class _FluxoCaixaPageState extends State<FluxoCaixaPage> with AuthErrorMixin {
                         children: [
                           // Summary cards
                           Padding(
-                            padding:
-                                const EdgeInsets.all(32).copyWith(bottom: 0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _SummaryCard(
-                                    label: 'Entradas',
-                                    value: formatCurrency(totalEntradas),
-                                    color: AppColors.success,
-                                    icon: Icons.arrow_downward_rounded,
+                            padding: EdgeInsets.all(isMobile ? 16 : 32).copyWith(bottom: 0),
+                            child: isMobile
+                                ? Column(
+                                    children: [
+                                      _SummaryCard(
+                                        label: 'Entradas',
+                                        value: formatCurrency(totalEntradas),
+                                        color: AppColors.success,
+                                        icon: Icons.arrow_downward_rounded,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _SummaryCard(
+                                        label: 'Saídas',
+                                        value: formatCurrency(totalSaidas),
+                                        color: AppColors.error,
+                                        icon: Icons.arrow_upward_rounded,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _SummaryCard(
+                                        label: 'Saldo do Período',
+                                        value: formatCurrency(saldoPeriodo),
+                                        color: saldoPeriodo >= 0
+                                            ? AppColors.success
+                                            : AppColors.error,
+                                        icon: Icons.account_balance_rounded,
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: _SummaryCard(
+                                          label: 'Entradas',
+                                          value: formatCurrency(totalEntradas),
+                                          color: AppColors.success,
+                                          icon: Icons.arrow_downward_rounded,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _SummaryCard(
+                                          label: 'Saídas',
+                                          value: formatCurrency(totalSaidas),
+                                          color: AppColors.error,
+                                          icon: Icons.arrow_upward_rounded,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _SummaryCard(
+                                          label: 'Saldo do Período',
+                                          value: formatCurrency(saldoPeriodo),
+                                          color: saldoPeriodo >= 0
+                                              ? AppColors.success
+                                              : AppColors.error,
+                                          icon: Icons.account_balance_rounded,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _SummaryCard(
-                                    label: 'Saídas',
-                                    value: formatCurrency(totalSaidas),
-                                    color: AppColors.error,
-                                    icon: Icons.arrow_upward_rounded,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _SummaryCard(
-                                    label: 'Saldo do Período',
-                                    value: formatCurrency(saldoPeriodo),
-                                    color: saldoPeriodo >= 0
-                                        ? AppColors.success
-                                        : AppColors.error,
-                                    icon: Icons.account_balance_rounded,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
                           const SizedBox(height: 16),
 
                           // Table
                           Expanded(
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 32),
+                              padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
                               child: Container(
                                 width: double.infinity,
                                 decoration: BoxDecoration(
@@ -238,7 +304,15 @@ class _FluxoCaixaPageState extends State<FluxoCaixaPage> with AuthErrorMixin {
                                       )
                                     : SingleChildScrollView(
                                         padding: const EdgeInsets.all(16),
-                                        child: _buildTable(),
+                                        child: isMobile
+                                            ? SingleChildScrollView(
+                                                scrollDirection: Axis.horizontal,
+                                                child: ConstrainedBox(
+                                                  constraints: const BoxConstraints(minWidth: 600),
+                                                  child: _buildTable(),
+                                                ),
+                                              )
+                                            : _buildTable(),
                                       ),
                               ),
                             ),

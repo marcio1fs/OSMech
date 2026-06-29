@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -568,31 +569,31 @@ public class OrdemServicoService {
         String oficinaNome = usuario.getNomeOficina() != null && !usuario.getNomeOficina().isBlank()
                 ? usuario.getNomeOficina()
                 : usuario.getNome();
-        String dataHora = LocalDateTime.now().toString().replace("T", " ");
+        String dataHora = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
         StringBuilder sb = new StringBuilder();
 
-        sb.append("EXTRATO DE RECEBIMENTO - OSMECH").append("\n");
+        sb.append("RECIBO / EXTRATO DE PAGAMENTO - OSMECH").append("\n");
         sb.append("====================================").append("\n");
         sb.append("OFICINA: ").append(oficinaNome).append("\n");
         sb.append("CNPJ OFICINA: ").append(defaultText(usuario.getCnpjOficina())).append("\n");
-        sb.append("RESPONSAVEL: ").append(usuario.getNome()).append("\n");
+        sb.append("RESPONSÁVEL: ").append(usuario.getNome()).append("\n");
         sb.append("EMAIL: ").append(usuario.getEmail()).append("\n");
         sb.append("TELEFONE: ").append(usuario.getTelefone()).append("\n");
-        sb.append("ENDERECO: ").append(defaultText(montarEnderecoOficina(usuario))).append("\n");
+        sb.append("ENDEREÇO: ").append(defaultText(montarEnderecoOficina(usuario))).append("\n");
         sb.append("SITE: ").append(defaultText(usuario.getSiteOficina())).append("\n");
         sb.append("------------------------------------").append("\n");
         sb.append("CLIENTE: ").append(defaultText(os.getClienteNome())).append("\n");
         sb.append("CPF: ").append(defaultText(os.getClienteCpf())).append("\n");
         sb.append("CNPJ: ").append(defaultText(os.getClienteCnpj())).append("\n");
         sb.append("TEL CLIENTE: ").append(defaultText(os.getClienteTelefone())).append("\n");
-        sb.append("VEICULO: ").append(defaultText(os.getModelo())).append("\n");
+        sb.append("VEÍCULO: ").append(defaultText(os.getModelo())).append("\n");
         sb.append("MONTADORA: ").append(defaultText(os.getMontadora())).append("\n");
         sb.append("COR: ").append(defaultText(os.getCorVeiculo())).append("\n");
         sb.append("PLACA: ").append(defaultText(os.getPlaca())).append("\n");
         sb.append("ANO: ").append(os.getAno() != null ? os.getAno() : "-").append("\n");
         sb.append("KM: ").append(os.getQuilometragem() != null ? os.getQuilometragem() : "-").append("\n");
         sb.append("------------------------------------").append("\n");
-        sb.append("LANCAMENTOS (SERVICOS)").append("\n");
+        sb.append("LANÇAMENTOS (SERVIÇOS)").append("\n");
 
         BigDecimal totalServicos = BigDecimal.ZERO;
         if (servicos != null && !servicos.isEmpty()) {
@@ -608,7 +609,7 @@ public class OrdemServicoService {
             sb.append("+ ").append(defaultText(os.getDescricao())).append("\n");
         }
 
-        sb.append("LANCAMENTOS (PECAS)").append("\n");
+        sb.append("LANÇAMENTOS (PEÇAS)").append("\n");
         BigDecimal totalPecas = BigDecimal.ZERO;
         if (itens != null && !itens.isEmpty()) {
             for (ItemOS item : itens) {
@@ -627,13 +628,13 @@ public class OrdemServicoService {
 
         sb.append("------------------------------------").append("\n");
         sb.append("RESUMO FINANCEIRO").append("\n");
-        sb.append("SERVICOS: ").append(moeda.format(totalServicos)).append("\n");
-        sb.append("PECAS: ").append(moeda.format(totalPecas)).append("\n");
+        sb.append("SERVIÇOS: ").append(moeda.format(totalServicos)).append("\n");
+        sb.append("PEÇAS: ").append(moeda.format(totalPecas)).append("\n");
         sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorTotal)).append("\n");
-        sb.append("METODO: ").append(defaultText(metodoPagamento)).append("\n");
+        sb.append("MÉTODO: ").append(defaultText(metodoPagamento)).append("\n");
         sb.append("OS: #").append(os.getId()).append("\n");
         if (transacao != null) {
-            sb.append("TRANSACAO: #").append(transacao.getId()).append("\n");
+            sb.append("TRANSAÇÃO: #").append(transacao.getId()).append("\n");
         }
         sb.append("STATUS OS: ").append(defaultText(os.getStatus())).append("\n");
         sb.append("DATA/HORA: ").append(dataHora).append("\n");

@@ -63,7 +63,7 @@ class _RegisterPageState extends State<RegisterPage> {
         builder: (ctx) => AlertDialog(
           title: const UpperText('Cadastro realizado'),
           content: const UpperText(
-              'Sua conta foi criada. Voce ja pode fazer login. Se receber o e-mail de verificacao, confirme para manter seus dados atualizados.'),
+              'Sua conta foi criada. Você já pode fazer login. Se receber o e-mail de verificação, confirme para manter seus dados atualizados.'),
           actions: [
             FilledButton(
               onPressed: () {

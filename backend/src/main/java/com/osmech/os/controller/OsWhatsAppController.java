@@ -190,10 +190,11 @@ public class OsWhatsAppController {
         BigDecimal totalServicos = somarServicos(servicos);
         BigDecimal totalPecas = somarItens(itens);
         BigDecimal valorBruto = os.getValor() != null ? os.getValor() : totalServicos.add(totalPecas);
-        BigDecimal descontoPercentual = os.getDescontoPercentual() != null ? os.getDescontoPercentual() : BigDecimal.ZERO;
-        BigDecimal descontoValor = valorBruto.multiply(descontoPercentual)
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        BigDecimal valorFinal = os.getValorFinal() != null ? os.getValorFinal() : valorBruto.subtract(descontoValor);
+        // Compatibilidade com modelo atual (modo local rápido)
+        BigDecimal descontoPercentual = BigDecimal.ZERO;
+        BigDecimal descontoValor = BigDecimal.ZERO;
+        BigDecimal valorFinal = valorBruto;
+
 
         sb.append("----------------------------------------\n");
         sb.append("RESUMO FINANCEIRO\n");

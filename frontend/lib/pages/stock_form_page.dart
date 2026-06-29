@@ -179,59 +179,75 @@ class _StockFormPageState extends State<StockFormPage> with AuthErrorMixin {
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                UpperText(isEditing ? 'Editar Peça' : 'Nova Peça',
-                    style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
-                const Spacer(),
-                OutlinedButton(
-                  onPressed: widget.onCancel ?? widget.onSaved,
-                  child: const UpperText('Cancelar'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: _saving ? null : _salvar,
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.save_rounded, size: 18),
-                  label: UpperText(_saving ? 'Salvando...' : 'Salvar'),
-                ),
-              ],
-            ),
+            child: LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 480;
+              final title = UpperText(isEditing ? 'Editar Peça' : 'Nova Peça',
+                  style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis);
+              final actions = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: widget.onCancel ?? widget.onSaved,
+                    child: const UpperText('Cancelar'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _saving ? null : _salvar,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.save_rounded, size: 18),
+                    label: UpperText(_saving ? 'Salvando...' : 'Salvar'),
+                  ),
+                ],
+              );
+              if (compact) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  title, const SizedBox(height: 12), actions,
+                ]);
+              }
+              return Row(children: [
+                Expanded(child: title),
+                const SizedBox(width: 16),
+                actions,
+              ]);
+            }),
           ),
+
 
           // Form
           Expanded(
             child: _loadingItem
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.accent))
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(32),
-                    child: Center(
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 700),
-                        padding: const EdgeInsets.all(32),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
+                : LayoutBuilder(builder: (context, constraints) {
+                    final hPad = constraints.maxWidth < 560 ? 12.0 : 32.0;
+                    final innerPad = constraints.maxWidth < 560 ? 16.0 : 32.0;
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 24),
+                      child: Center(
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 700),
+                          padding: EdgeInsets.all(innerPad),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               UpperText('Informações da Peça',
@@ -266,6 +282,7 @@ class _StockFormPageState extends State<StockFormPage> with AuthErrorMixin {
                                   Expanded(
                                     flex: 2,
                                     child: DropdownButtonFormField<String>(
+                                      isExpanded: true,
                                       value: _categoria,
                                       decoration: const InputDecoration(
                                         labelText: 'Categoria',
@@ -275,7 +292,11 @@ class _StockFormPageState extends State<StockFormPage> with AuthErrorMixin {
                                       items: _categoriaLabels.entries
                                           .map((e) => DropdownMenuItem(
                                               value: e.key,
-                                              child: UpperText(e.value)))
+                                              child: UpperText(
+                                                e.value,
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1,
+                                              )))
                                           .toList(),
                                       onChanged: (v) =>
                                           setState(() => _categoria = v!),
@@ -436,7 +457,8 @@ class _StockFormPageState extends State<StockFormPage> with AuthErrorMixin {
                         ),
                       ),
                     ),
-                  ),
+                  );
+                }),
           ),
         ],
       ),

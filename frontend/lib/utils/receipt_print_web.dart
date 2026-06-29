@@ -63,7 +63,7 @@ String _buildReceiptHtml(String receipt, String name, {String? logoUrl}) {
     @page { size: auto; margin: 8mm; }
     html, body { margin: 0; padding: 0; background: white; }
     body { font-family: "Courier New", monospace; font-size: 11px; line-height: 1.45; color: #111827; }
-    pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
   </style>
 </head>
 <body>

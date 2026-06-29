@@ -1,6 +1,3 @@
-import 'dart:convert';
-import '../widgets/upper_text.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +8,7 @@ import '../services/mecanico_service.dart';
 import '../services/os_service.dart';
 import '../services/stock_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/receipt_print.dart';
 import '../mixins/auth_error_mixin.dart';
 import '../widgets/upper_text.dart';
 
@@ -528,15 +526,18 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
   }
 
   Future<void> _carregarStockItems() async {
+    if (!mounted) return;
     setState(() => _loadingStock = true);
     try {
       final stockService = StockService(token: safeToken);
       final items = await stockService.listarItens();
+      if (!mounted) return;
       setState(() {
         _stockItems = items.where((i) => (i['ativo'] ?? true) == true).toList();
         _loadingStock = false;
       });
     } catch (e) {
+      if (!mounted) return;
       if (!handleAuthError(e)) {
         setState(() => _loadingStock = false);
       }
@@ -547,6 +548,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     if (_loadingMontadoras) return;
     if (_montadorasCarregadas && !force) return;
 
+    if (!mounted) return;
     setState(() => _loadingMontadoras = true);
     final montadorasMap = <String, String>{};
 
@@ -809,7 +811,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     if (_status == 'CONCLUIDA') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: UpperText('Esta OS ja esta concluida'),
+          content: UpperText('Esta OS já está concluída'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -823,7 +825,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
           title: UpperText('Encerrar OS',
               style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
           content: UpperText(
-            'Existem alteracoes nao salvas neste formulario. Deseja encerrar mesmo assim?',
+            'Existem alterações não salvas neste formulário. Deseja encerrar mesmo assim?',
             style:
                 GoogleFonts.inter(color: AppColors.textSecondary, height: 1.45),
           ),
@@ -917,10 +919,10 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                     DropdownMenuItem(value: 'PIX', child: UpperText('PIX')),
                     DropdownMenuItem(
                         value: 'DINHEIRO', child: UpperText('Dinheiro')),
-                    DropdownMenuItem(value: 'CARTAO', child: UpperText('Cartao')),
+                    DropdownMenuItem(value: 'CARTAO', child: UpperText('Cartão')),
                     DropdownMenuItem(value: 'BOLETO', child: UpperText('Boleto')),
                     DropdownMenuItem(
-                        value: 'TRANSFERENCIA', child: UpperText('Transferencia')),
+                        value: 'TRANSFERENCIA', child: UpperText('Transferência')),
                   ],
                   onChanged: (v) =>
                       setDialogState(() => metodoPagamento = v ?? 'PIX'),
@@ -930,7 +932,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                   controller: obsController,
                   maxLines: 2,
                   decoration: const InputDecoration(
-                    labelText: 'Observacoes do pagamento (opcional)',
+                    labelText: 'Observações do pagamento (opcional)',
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -990,7 +992,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: UpperText('Informe um telefone valido para WhatsApp'),
+          content: UpperText('Informe um telefone válido para WhatsApp'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -1003,7 +1005,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: UpperText('Nao foi possivel abrir o WhatsApp'),
+          content: UpperText('Não foi possível abrir o WhatsApp'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -1011,26 +1013,14 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
   }
 
   Future<void> _imprimirRecibo(String recibo) async {
-    final html = '''
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Recibo OSMech</title>
-  <style>
-    body { font-family: Consolas, monospace; padding: 24px; white-space: pre-wrap; }
-  </style>
-</head>
-<body>${recibo.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</body>
-<script>window.print();</script>
-</html>''';
-    final uri = Uri.dataFromString(html,
-        mimeType: 'text/html', encoding: Encoding.getByName('utf-8'));
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
+    try {
+      final id = widget.osData?['id'] ?? 'nova';
+      await printReceiptText(recibo, 'Recibo_OS_$id');
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: UpperText('Nao foi possivel abrir a tela de impressao'),
+        SnackBar(
+          content: UpperText('Não foi possível abrir a tela de impressão: $e'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -1098,7 +1088,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: UpperText('Recibo copiado para a area de transferencia'),
+                  content: UpperText('Recibo copiado para a área de transferência'),
                   backgroundColor: AppColors.success,
                 ),
               );
@@ -1128,6 +1118,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
       return;
     }
 
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final osService = OsService(token: safeToken);
@@ -1211,7 +1202,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
         }
       }
     }
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -1912,7 +1903,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                   Expanded(
                     child: UpperText(
                       s.mecanicoId == null
-                          ? 'Comissao nao atribuida'
+                          ? 'Comissão não atribuída'
                           : 'Mecanico: ${_nomeMecanicoPorId(s.mecanicoId)}',
                       style: GoogleFonts.inter(
                         fontSize: 12,

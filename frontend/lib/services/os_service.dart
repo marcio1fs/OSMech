@@ -111,5 +111,26 @@ class OsService {
     final body = jsonDecode(response.body);
     throw Exception(body['error'] ?? 'Erro ao enviar recibo via WhatsApp');
   }
+
+  /// Obtém o recibo (texto) de uma OS concluída.
+  /// Usado pela tela de detalhes (botão “Ver Recibo”).
+  Future<String> obterRecibo(num id) async {
+    final idValue = _normalizeId(id);
+    final response = await _api.get('/api/os/$idValue/recibo');
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      // tolera diferentes formatos do backend
+      if (body is String) return body;
+      if (body is Map && body['recibo'] != null) return body['recibo'].toString();
+      if (body is Map && body['texto'] != null) return body['texto'].toString();
+      return body.toString();
+    }
+
+    final body = jsonDecode(response.body);
+    throw Exception(body['error'] ?? 'Erro ao obter recibo');
+  }
 }
+
+
 

@@ -201,19 +201,20 @@ class _MecanicosPageState extends State<MecanicosPage> with AuthErrorMixin {
       child: Column(
         children: [
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            constraints: const BoxConstraints(minHeight: 72),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 620;
+                final title = Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    UpperText('Mecânicos',
+                    UpperText('Mecanicos',
                         style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -222,29 +223,59 @@ class _MecanicosPageState extends State<MecanicosPage> with AuthErrorMixin {
                         style: GoogleFonts.inter(
                             fontSize: 13, color: AppColors.textSecondary)),
                   ],
-                ),
-                const Spacer(),
-                Switch(
-                  value: _ativosOnly,
-                  onChanged: (v) {
-                    setState(() => _ativosOnly = v);
-                    _loadMecanicos();
-                  },
-                ),
-                UpperText('Somente ativos', style: GoogleFonts.inter(fontSize: 12)),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: _loadMecanicos,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const UpperText('Atualizar'),
-                ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
-                  onPressed: () => _abrirDialogo(),
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                  label: const UpperText('Novo Mecânico'),
-                ),
-              ],
+                );
+
+                final actions = Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Switch(
+                          value: _ativosOnly,
+                          onChanged: (v) {
+                            setState(() => _ativosOnly = v);
+                            _loadMecanicos();
+                          },
+                        ),
+                        UpperText('Somente ativos',
+                            style: GoogleFonts.inter(fontSize: 12)),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _loadMecanicos,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const UpperText('Atualizar'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => _abrirDialogo(),
+                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                      label: const UpperText('Novo Mecanico'),
+                    ),
+                  ],
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      title,
+                      const SizedBox(height: 10),
+                      actions,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: 16),
+                    actions,
+                  ],
+                );
+              },
             ),
           ),
           Expanded(
@@ -266,61 +297,85 @@ class _MecanicosPageState extends State<MecanicosPage> with AuthErrorMixin {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: AppColors.border),
                             ),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.accent
-                                    .withValues(alpha: 0.12),
-                                child: const Icon(Icons.engineering_rounded,
-                                    color: AppColors.accent),
-                              ),
-                              title: UpperText(m['nome'] ?? '-',
-                                  style: GoogleFonts.inter(
-                                      fontWeight: FontWeight.w600)),
-                              subtitle: UpperText(
-                                '${m['especialidade'] ?? 'Sem especialidade'} • ${m['telefone'] ?? 'Sem telefone'} • Comissao: ${m['percentualComissao'] ?? 0}%',
-                                style: GoogleFonts.inter(fontSize: 12),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: ativo
-                                          ? AppColors.success
-                                              .withValues(alpha: 0.12)
-                                          : AppColors.error
-                                              .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(20),
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: AppColors.accent
+                                          .withValues(alpha: 0.12),
+                                      child: const Icon(Icons.engineering_rounded,
+                                          color: AppColors.accent),
                                     ),
-                                    child: UpperText(
-                                      ativo ? 'Ativo' : 'Inativo',
-                                      style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: ativo
-                                              ? AppColors.success
-                                              : AppColors.error),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          UpperText(m['nome'] ?? '-',
+                                              style: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w600)),
+                                          const SizedBox(height: 2),
+                                          UpperText(
+                                            '${m['especialidade'] ?? 'Sem especialidade'} • ${m['telefone'] ?? 'Sem telefone'} • Comissao: ${m['percentualComissao'] ?? 0}%',
+                                            style: GoogleFonts.inter(fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () => _abrirDialogo(mecanico: m),
-                                    icon: const Icon(Icons.edit_rounded),
-                                  ),
-                                  IconButton(
-                                    onPressed: () => _toggleAtivo(m),
-                                    icon: Icon(
-                                      ativo
-                                          ? Icons.person_off_rounded
-                                          : Icons.restart_alt_rounded,
-                                      color: ativo
-                                          ? AppColors.error
-                                          : AppColors.success,
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: ativo
+                                            ? AppColors.success
+                                                .withValues(alpha: 0.12)
+                                            : AppColors.error
+                                                .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: UpperText(
+                                        ativo ? 'Ativo' : 'Inativo',
+                                        style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: ativo
+                                                ? AppColors.success
+                                                : AppColors.error),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          onPressed: () => _abrirDialogo(mecanico: m),
+                                          icon: const Icon(Icons.edit_rounded, size: 20),
+                                        ),
+                                        IconButton(
+                                          onPressed: () => _toggleAtivo(m),
+                                          icon: Icon(
+                                            ativo
+                                                ? Icons.person_off_rounded
+                                                : Icons.restart_alt_rounded,
+                                            color: ativo
+                                                ? AppColors.error
+                                                : AppColors.success,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           );
                         },

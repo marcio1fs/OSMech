@@ -59,36 +59,43 @@ class _StockAlertsPageState extends State<StockAlertsPage> with AuthErrorMixin {
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                UpperText('Alertas de Estoque',
-                    style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: _loadAlertas,
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const UpperText('Atualizar'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                  ),
+            child: LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
+              final title = UpperText('Alertas de Estoque',
+                  style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis);
+              final actions = FilledButton.icon(
+                onPressed: _loadAlertas,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const UpperText('Atualizar'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
-              ],
-            ),
+              );
+              if (compact) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  title, const SizedBox(height: 12), actions,
+                ]);
+              }
+              return Row(children: [
+                Expanded(child: title),
+                const SizedBox(width: 16),
+                actions,
+              ]);
+            }),
           ),
+
 
           Expanded(
             child: _loading

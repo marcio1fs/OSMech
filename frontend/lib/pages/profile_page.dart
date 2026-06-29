@@ -320,18 +320,18 @@ class _ProfilePageState extends State<ProfilePage> with AuthErrorMixin {
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.textPrimary)),
                           const SizedBox(height: 4),
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               _badge(_plano, AppColors.accent),
-                              const SizedBox(width: 8),
                               _badge(_role, AppColors.textSecondary),
-                              if (_criadoEm.isNotEmpty) ...[
-                                const SizedBox(width: 8),
+                              if (_criadoEm.isNotEmpty)
                                 UpperText('Desde $_criadoEm',
                                     style: GoogleFonts.inter(
                                         fontSize: 12,
                                         color: AppColors.textSecondary)),
-                              ],
                             ],
                           ),
                         ],

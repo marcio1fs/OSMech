@@ -50,21 +50,20 @@ public class AuthService {
                 .telefone(request.getTelefone())
                 .nomeOficina(request.getNomeOficina())
                 .role("OFICINA")
-                .emailVerificado(false)
-                .verificationToken(vToken)
                 .build();
+
 
         usuarioRepository.save(usuario);
 
         // Envia e-mail de verificação (em um cenário real, isso poderia ser assíncrono)
-        emailService.enviarEmailVerificacao(usuario.getEmail(), vToken);
+        // Desabilitado no modo local rápido: sua entidade Usuario atual não suporta verificationToken.
 
         return AuthResponse.builder()
                 .email(usuario.getEmail())
                 .nome(usuario.getNome())
                 .role(usuario.getRole())
-                .message("Cadastro realizado! Voce ja pode fazer login. Se receber o e-mail de verificacao, confirme para manter seus dados atualizados.")
                 .build();
+
     }
 
     /**
@@ -89,42 +88,22 @@ public class AuthService {
                 .build();
     }
 
+    // Fluxos de verificação e recuperação de senha foram desabilitados no modo local rápido,
+    // pois sua entidade Usuario atual não contém os campos/tokens correspondentes.
     @Transactional
     public void verifyEmail(String token) {
-        Usuario usuario = usuarioRepository.findByVerificationToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Token de verificação inválido ou expirado."));
-
-        usuario.setEmailVerificado(true);
-        usuario.setVerificationToken(null);
-        usuarioRepository.save(usuario);
+        throw new UnsupportedOperationException("Verificação de e-mail está indisponível no modo local rápido.");
     }
 
     @Transactional
     public void forgotPassword(String email) {
-        Usuario usuario = usuarioRepository.findByEmail(email.toLowerCase().trim())
-                .orElseThrow(() -> new IllegalArgumentException("Se este e-mail estiver cadastrado, você receberá as instruções."));
-
-        String token = java.util.UUID.randomUUID().toString();
-        usuario.setResetPasswordToken(token);
-        usuario.setResetPasswordTokenExpiry(java.time.LocalDateTime.now().plusHours(1));
-        usuarioRepository.save(usuario);
-
-        emailService.enviarEmailRecuperacaoSenha(usuario.getEmail(), token);
+        throw new UnsupportedOperationException("Recuperação de senha está indisponível no modo local rápido.");
     }
 
     @Transactional
     public void resetPassword(String token, String newPassword) {
-        Usuario usuario = usuarioRepository.findByResetPasswordToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Token de recuperação inválido ou expirado."));
-
-        if (usuario.getResetPasswordTokenExpiry().isBefore(java.time.LocalDateTime.now())) {
-            throw new IllegalArgumentException("Token de recuperação expirado.");
-        }
-
-        usuario.setSenha(passwordEncoder.encode(newPassword));
-        usuario.setResetPasswordToken(null);
-        usuario.setResetPasswordTokenExpiry(null);
-        usuarioRepository.save(usuario);
+        throw new UnsupportedOperationException("Reset de senha está indisponível no modo local rápido.");
     }
+
 }
 

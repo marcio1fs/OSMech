@@ -121,39 +121,55 @@ class _DashboardPageState extends State<DashboardPage> with AuthErrorMixin {
   // ── Header ──────────────────────────────────────────────────────────────────
   Widget _buildHeader(AuthService auth, String hora, DateTime now) {
     final dia = '${now.day.toString().padLeft(2,'0')}/${now.month.toString().padLeft(2,'0')}/${now.year}';
+    final primeiroNome = (auth.nome?.isNotEmpty == true ? auth.nome!.split(' ').first : null) ?? 'Usuário';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          UpperText('$hora, ${(auth.nome?.isNotEmpty == true ? auth.nome!.split(' ').first : null) ?? 'Usuário'}',
-              style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final title = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          UpperText('$hora, $primeiroNome',
+              style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis),
           UpperText(dia, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-        ])),
-        // Badge do plano
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+        ]);
+        final actions = Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+            ),
+            child: UpperText('Plano ${auth.plano ?? "FREE"}',
+                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accent)),
           ),
-          child: UpperText('Plano ${auth.plano ?? "FREE"}',
-              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accent)),
-        ),
-        const SizedBox(width: 12),
-        IconButton(onPressed: _loadData, icon: const Icon(Icons.refresh_rounded, size: 20),
-            tooltip: 'Atualizar', style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary)),
-        const SizedBox(width: 8),
-        FilledButton.icon(
-          onPressed: () => widget.onNavigate?.call(_idxNovaOs),
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const UpperText('Nova OS'),
-        ),
-      ]),
+          IconButton(onPressed: _loadData, icon: const Icon(Icons.refresh_rounded, size: 20),
+              tooltip: 'Atualizar', style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary)),
+          FilledButton.icon(
+            onPressed: () => widget.onNavigate?.call(_idxNovaOs),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const UpperText('Nova OS'),
+          ),
+        ]);
+
+        if (constraints.maxWidth < 620) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            title,
+            const SizedBox(height: 12),
+            actions,
+          ]);
+        }
+
+        return Row(children: [
+          Expanded(child: title),
+          const SizedBox(width: 16),
+          actions,
+        ]);
+      }),
     );
   }
 
@@ -168,30 +184,31 @@ class _DashboardPageState extends State<DashboardPage> with AuthErrorMixin {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _sectionTitle('Financeiro — Mês Atual'),
       const SizedBox(height: 12),
-      Row(children: [
-        _FinCard(label: 'Receitas', value: formatCurrency(entradasMes),
-            icon: Icons.arrow_circle_down_rounded, color: AppColors.success,
-            onTap: () => widget.onNavigate?.call(_idxFinanceiro)),
-        const SizedBox(width: 12),
-        _FinCard(label: 'Despesas', value: formatCurrency(saidasMes),
-            icon: Icons.arrow_circle_up_rounded, color: AppColors.error,
-            onTap: () => widget.onNavigate?.call(_idxFinanceiro)),
-        const SizedBox(width: 12),
-        _FinCard(label: 'Lucro', value: formatCurrency(lucroMes),
-            icon: Icons.account_balance_wallet_rounded,
-            color: lucroMes >= 0 ? AppColors.success : AppColors.error,
-            onTap: () => widget.onNavigate?.call(_idxFluxoCaixa)),
-        const SizedBox(width: 12),
-        _FinCard(label: 'Saldo Acumulado', value: formatCurrency(saldoAtual),
-            icon: Icons.savings_rounded,
-            color: saldoAtual >= 0 ? AppColors.textPrimary : AppColors.error,
-            onTap: () => widget.onNavigate?.call(_idxFluxoCaixa)),
-        const SizedBox(width: 12),
-        _FinCard(label: 'Margem', value: '${margem.toStringAsFixed(1)}%',
-            icon: Icons.pie_chart_rounded,
-            color: margem >= 20 ? AppColors.success : AppColors.warning,
-            onTap: () => widget.onNavigate?.call(_idxRelatorios)),
-      ]),
+      LayoutBuilder(builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final columns = maxWidth >= 1180 ? 5 : maxWidth >= 900 ? 3 : maxWidth >= 560 ? 2 : 1;
+        final cardWidth = (maxWidth - (12 * (columns - 1))) / columns;
+        return Wrap(spacing: 12, runSpacing: 12, children: [
+          SizedBox(width: cardWidth, child: _FinCard(label: 'Receitas', value: formatCurrency(entradasMes),
+              icon: Icons.arrow_circle_down_rounded, color: AppColors.success,
+              onTap: () => widget.onNavigate?.call(_idxFinanceiro))),
+          SizedBox(width: cardWidth, child: _FinCard(label: 'Despesas', value: formatCurrency(saidasMes),
+              icon: Icons.arrow_circle_up_rounded, color: AppColors.error,
+              onTap: () => widget.onNavigate?.call(_idxFinanceiro))),
+          SizedBox(width: cardWidth, child: _FinCard(label: 'Lucro', value: formatCurrency(lucroMes),
+              icon: Icons.account_balance_wallet_rounded,
+              color: lucroMes >= 0 ? AppColors.success : AppColors.error,
+              onTap: () => widget.onNavigate?.call(_idxFluxoCaixa))),
+          SizedBox(width: cardWidth, child: _FinCard(label: 'Saldo Acumulado', value: formatCurrency(saldoAtual),
+              icon: Icons.savings_rounded,
+              color: saldoAtual >= 0 ? AppColors.textPrimary : AppColors.error,
+              onTap: () => widget.onNavigate?.call(_idxFluxoCaixa))),
+          SizedBox(width: cardWidth, child: _FinCard(label: 'Margem', value: '${margem.toStringAsFixed(1)}%',
+              icon: Icons.pie_chart_rounded,
+              color: margem >= 20 ? AppColors.success : AppColors.warning,
+              onTap: () => widget.onNavigate?.call(_idxRelatorios))),
+        ]);
+      }),
     ]);
   }
 
@@ -211,9 +228,8 @@ class _DashboardPageState extends State<DashboardPage> with AuthErrorMixin {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _sectionTitle('Ordens de Serviço'),
       const SizedBox(height: 12),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Contadores
-        Expanded(flex: 3, child: Wrap(spacing: 12, runSpacing: 12, children: [
+      LayoutBuilder(builder: (context, constraints) {
+        final counters = Wrap(spacing: 12, runSpacing: 12, children: [
           _OsCountCard(label: 'Total', value: total, color: AppColors.textSecondary,
               icon: Icons.assignment_rounded, onTap: () => widget.onNavigate?.call(_idxListaOs)),
           _OsCountCard(label: 'Abertas', value: abertas, color: const Color(0xFFF59E0B),
@@ -233,11 +249,22 @@ class _DashboardPageState extends State<DashboardPage> with AuthErrorMixin {
           _OsCountCard(label: 'Taxa Conclusão', value: null, valueStr: '${taxa.toStringAsFixed(0)}%',
               color: taxa >= 70 ? AppColors.success : AppColors.warning,
               icon: Icons.speed_rounded, onTap: () => widget.onNavigate?.call(_idxRelatorios)),
-        ])),
-        const SizedBox(width: 16),
-        // OS recentes
-        Expanded(flex: 2, child: _buildOsRecentes()),
-      ]),
+        ]);
+
+        if (constraints.maxWidth < 860) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            counters,
+            const SizedBox(height: 16),
+            _buildOsRecentes(),
+          ]);
+        }
+
+        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(flex: 3, child: counters),
+          const SizedBox(width: 16),
+          Expanded(flex: 2, child: _buildOsRecentes()),
+        ]);
+      }),
     ]);
   }
 
@@ -346,15 +373,30 @@ class _DashboardPageState extends State<DashboardPage> with AuthErrorMixin {
 
   // ── Linha inferior: alertas + plano ──────────────────────────────────────────
   Widget _buildBottomRow(AuthService auth) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Alertas de estoque
-      if (_alertasEstoque.isNotEmpty)
-        Expanded(child: _buildAlertasEstoque()),
-      if (_alertasEstoque.isNotEmpty) const SizedBox(width: 16),
-      // Indicador de plano FREE
-      if ((auth.plano ?? 'FREE') == 'FREE')
-        Expanded(child: _buildPlanoFreeCard(auth)),
-    ]);
+    final children = <Widget>[
+      if (_alertasEstoque.isNotEmpty) _buildAlertasEstoque(),
+      if ((auth.plano ?? 'FREE') == 'FREE') _buildPlanoFreeCard(auth),
+    ];
+    if (children.isEmpty) return const SizedBox.shrink();
+
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 760 || children.length == 1) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const SizedBox(height: 16),
+              children[i],
+            ],
+          ],
+        );
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: children[0]),
+        const SizedBox(width: 16),
+        Expanded(child: children[1]),
+      ]);
+    });
   }
 
   Widget _buildAlertasEstoque() {
@@ -423,7 +465,8 @@ class _DashboardPageState extends State<DashboardPage> with AuthErrorMixin {
         ]),
         const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          UpperText('OS este mês', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+          Flexible(child: UpperText('OS este mês', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 8),
           UpperText('$esteMes / $limiteOs', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700,
               color: restam <= 2 ? AppColors.error : AppColors.textPrimary)),
         ]),
@@ -495,11 +538,10 @@ class _FinCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -528,7 +570,6 @@ class _FinCard extends StatelessWidget {
                 style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
           ]),
         ),
-      ),
     );
   }
 }

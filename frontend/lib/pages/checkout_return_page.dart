@@ -47,7 +47,7 @@ class _CheckoutReturnPageState extends State<CheckoutReturnPage>
       }
     } catch (e) {
       if (!handleAuthError(e)) {
-        _error = 'Nao foi possivel atualizar o status da assinatura.';
+        _error = 'Não foi possível atualizar o status da assinatura.';
       }
     } finally {
       if (mounted) {
@@ -89,7 +89,7 @@ class _CheckoutReturnPageState extends State<CheckoutReturnPage>
       case 'pendente':
         return 'Pagamento pendente';
       case 'falha':
-        return 'Pagamento nao aprovado';
+        return 'Pagamento não aprovado';
       default:
         return 'Retorno do pagamento';
     }
@@ -106,9 +106,9 @@ class _CheckoutReturnPageState extends State<CheckoutReturnPage>
       case 'sucesso':
         return 'Estamos confirmando os dados do pagamento.';
       case 'pendente':
-        return 'Seu pagamento ainda esta em analise no Mercado Pago.';
+        return 'Seu pagamento ainda está em análise no Mercado Pago.';
       case 'falha':
-        return 'Voce pode tentar novamente escolhendo outro meio de pagamento.';
+        return 'Você pode tentar novamente escolhendo outro meio de pagamento.';
       default:
         return 'Confira o status da assinatura para continuar.';
     }

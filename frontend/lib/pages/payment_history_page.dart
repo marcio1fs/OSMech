@@ -6,7 +6,7 @@ import '../mixins/auth_error_mixin.dart';
 import '../utils/formatters.dart';
 import '../widgets/upper_text.dart';
 
-/// Tela de histórico de pagamentos — design moderno com tabs.
+/// Tela de histórico de pagamentos.
 class PaymentHistoryPage extends StatefulWidget {
   const PaymentHistoryPage({super.key});
 
@@ -187,6 +187,8 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage>
         return 'Cartão de Crédito';
       case 'CARTAO_DEBITO':
         return 'Cartão de Débito';
+      case 'CARTAO':
+        return 'Cartão';
       case 'DINHEIRO':
         return 'Dinheiro';
       case 'BOLETO':
@@ -200,102 +202,108 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage>
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 640;
+    final horizontalPadding = isCompact ? 16.0 : 32.0;
+
     return Container(
       color: AppColors.background,
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        UpperText('Pagamentos',
-                            style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        UpperText('${_todos.length} registro(s)',
-                            style: GoogleFonts.inter(
-                                fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      onPressed: _loadPagamentos,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const UpperText('Atualizar'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TabBar(
-                  controller: _tabController,
-                  labelStyle: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600, fontSize: 13),
-                  unselectedLabelStyle: GoogleFonts.inter(
-                      fontWeight: FontWeight.w400, fontSize: 13),
-                  labelColor: AppColors.accent,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: AppColors.accent,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  tabs: [
-                    Tab(text: 'Todos (${_todos.length})'),
-                    Tab(text: 'Assinatura (${_assinatura.length})'),
-                    Tab(text: 'OS (${_os.length})'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Content
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.accent))
-                : _error != null
-                    ? Center(
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.error_outline_rounded,
-                                size: 48, color: AppColors.error),
-                            const SizedBox(height: 12),
-                            UpperText(_error!,
+                            UpperText('Pagamentos',
                                 style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary)),
+                            UpperText('${_todos.length} registro(s)',
+                                style: GoogleFonts.inter(
+                                    fontSize: 13,
                                     color: AppColors.textSecondary)),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                                onPressed: _loadPagamentos,
-                                child: const UpperText('Tentar novamente')),
                           ],
                         ),
-                      )
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildPaymentTable(_todos),
-                          _buildPaymentTable(_assinatura),
-                          _buildPaymentTable(_os),
-                        ],
                       ),
-          ),
-        ],
+                      IconButton(
+                        onPressed: _loadPagamentos,
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                        tooltip: 'Atualizar',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TabBar(
+                    controller: _tabController,
+                    isScrollable: isCompact,
+                    labelStyle: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                    unselectedLabelStyle: GoogleFonts.inter(
+                        fontWeight: FontWeight.w400, fontSize: 13),
+                    labelColor: AppColors.accent,
+                    unselectedLabelColor: AppColors.textSecondary,
+                    indicatorColor: AppColors.accent,
+                    indicatorSize: TabBarIndicatorSize.label,
+                    tabs: [
+                      Tab(text: 'Todos (${_todos.length})'),
+                      Tab(text: 'Assinatura (${_assinatura.length})'),
+                      Tab(text: 'OS (${_os.length})'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.accent))
+                  : _error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline_rounded,
+                                  size: 48, color: AppColors.error),
+                              const SizedBox(height: 12),
+                              UpperText(_error!,
+                                  style: GoogleFonts.inter(
+                                      color: AppColors.textSecondary)),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                  onPressed: _loadPagamentos,
+                                  child: const UpperText('Tentar novamente')),
+                            ],
+                          ),
+                        )
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildPayments(_todos),
+                            _buildPayments(_assinatura),
+                            _buildPayments(_os),
+                          ],
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildPaymentTable(List<Map<String, dynamic>> pagamentos) {
+  Widget _buildPayments(List<Map<String, dynamic>> pagamentos) {
     if (pagamentos.isEmpty) {
       return Center(
         child: Column(
@@ -312,16 +320,112 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage>
       );
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 640) {
+          return _buildPaymentCards(pagamentos);
+        }
+        return _buildPaymentTable(pagamentos);
+      },
+    );
+  }
+
+  Widget _buildPaymentCards(List<Map<String, dynamic>> pagamentos) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      itemCount: pagamentos.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final p = pagamentos[index];
+        final status = p['status'] as String?;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: UpperText(
+                      p['descricao'] ?? p['tipo'] ?? 'Pagamento',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildStatusChip(status),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _MobilePaymentRow(
+                label: 'Valor',
+                value: formatCurrency(p['valor'] ?? 0),
+                valueWeight: FontWeight.w800,
+              ),
+              _MobilePaymentRow(
+                label: 'Método',
+                value: _metodoPagamentoLabel(p['metodoPagamento']),
+              ),
+              _MobilePaymentRow(
+                label: 'Tipo',
+                value: p['tipo'] ?? '-',
+              ),
+              _MobilePaymentRow(
+                label: 'Data',
+                value: formatDateTimeBR(p['criadoEm']),
+              ),
+              if (status == 'PENDENTE') ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _cancelarPagamento(p['id']),
+                        icon: const Icon(Icons.cancel_outlined, size: 18),
+                        label: const UpperText('Cancelar'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _confirmarPagamento(p['id']),
+                        icon: const Icon(Icons.check_circle_outline_rounded,
+                            size: 18),
+                        label: const UpperText('Confirmar'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPaymentTable(List<Map<String, dynamic>> pagamentos) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.border),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(8),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
@@ -346,27 +450,13 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage>
               ],
               rows: pagamentos.map((p) {
                 final status = p['status'] as String?;
-                final color = _statusColor(status);
                 return DataRow(
                   cells: [
                     DataCell(UpperText(p['descricao'] ?? p['tipo'] ?? 'Pagamento',
                         style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
                     DataCell(UpperText(p['tipo'] ?? '-')),
                     DataCell(UpperText(_metodoPagamentoLabel(p['metodoPagamento']))),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20)),
-                        child: UpperText(_statusLabel(status),
-                            style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: color)),
-                      ),
-                    ),
+                    DataCell(_buildStatusChip(status)),
                     DataCell(UpperText(formatCurrency(p['valor'] ?? 0),
                         style: GoogleFonts.inter(fontWeight: FontWeight.w700))),
                     DataCell(UpperText(formatDateTimeBR(p['criadoEm']),
@@ -401,6 +491,70 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String? status) {
+    final color = _statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: UpperText(
+        _statusLabel(status),
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _MobilePaymentRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final FontWeight valueWeight;
+
+  const _MobilePaymentRow({
+    required this.label,
+    required this.value,
+    this.valueWeight = FontWeight.w600,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 72,
+            child: UpperText(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: UpperText(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: valueWeight,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

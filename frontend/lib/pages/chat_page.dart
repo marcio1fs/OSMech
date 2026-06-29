@@ -42,9 +42,11 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
     try {
       final service = ChatService(token: safeToken);
       final sessoes = await service.getSessoes();
+      if (!mounted) return;
       if (sessoes.isNotEmpty) {
         _sessionId = sessoes.first;
         final historico = await service.getHistorico(_sessionId!);
+        if (!mounted) return;
         setState(() {
           _messages = historico
               .map((m) => _ChatMsg(
@@ -56,8 +58,10 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
         _scrollToBottom();
       }
     } catch (e) {
+      if (!mounted) return;
       handleAuthError(e);
     }
+    if (!mounted) return;
     setState(() => _loading = false);
   }
 
@@ -75,6 +79,7 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
     try {
       final service = ChatService(token: safeToken);
       final resp = await service.enviarMensagem(text, sessionId: _sessionId);
+      if (!mounted) return;
       setState(() {
         _sessionId = resp['sessionId'] as String?;
         _messages.add(_ChatMsg(
@@ -85,6 +90,7 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
       });
       _scrollToBottom();
     } catch (e) {
+      if (!mounted) return;
       if (!handleAuthError(e)) {
         setState(() {
           _messages.add(_ChatMsg(
@@ -108,6 +114,7 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -126,8 +133,7 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
         children: [
           // ─── Header ────────────────────────────────────────────
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
@@ -147,33 +153,42 @@ class _ChatPageState extends State<ChatPage> with AuthErrorMixin {
                       color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    UpperText('IA OSMECH',
-                        style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('Assistente de oficina mecânica',
-                        style: GoogleFonts.inter(
-                            fontSize: 11, color: AppColors.textMuted)),
-                  ],
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      UpperText('IA OSMECH',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary)),
+                      UpperText('Assistente de oficina mecânica',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: AppColors.textMuted)),
+                    ],
+                  ),
                 ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: _novaSessao,
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  label: UpperText('Nova conversa',
-                      style: GoogleFonts.inter(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.accent,
-                    side: const BorderSide(color: AppColors.accent),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                Flexible(
+                  child: OutlinedButton.icon(
+                    onPressed: _novaSessao,
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: UpperText('Nova conversa',
+                        style: GoogleFonts.inter(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.accent,
+                      side: const BorderSide(color: AppColors.accent),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    ),
                   ),
                 ),
               ],

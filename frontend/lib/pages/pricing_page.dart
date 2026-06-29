@@ -105,7 +105,7 @@ class _PricingPageState extends State<PricingPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: UpperText(
-                'O plano Gratuito nao precisa de pagamento. Ele ja e o plano base da conta.'),
+                'O plano Gratuito n?o precisa de pagamento. Ele j? ? o plano base da conta.'),
           ),
         );
       }
@@ -160,36 +160,39 @@ class _PricingPageState extends State<PricingPage> {
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText(
-                      'Planos',
-                      style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      UpperText(
+                        'Planos e Assinaturas',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    UpperText(
-                      'Escolha o melhor plano para sua oficina',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
+                      UpperText(
+                        'Escolha o melhor plano para sua oficina',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 16),
                 OutlinedButton.icon(
                   onPressed: _loadPlanos,
                   icon: const Icon(Icons.refresh_rounded, size: 18),

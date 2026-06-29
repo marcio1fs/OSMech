@@ -207,42 +207,52 @@ class _CategoriasPageState extends State<CategoriasPage> with AuthErrorMixin {
         children: [
           // Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    UpperText('Categorias',
-                        style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    UpperText('Gerencie categorias de entradas e saídas',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textSecondary)),
-                  ],
+            child: LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
+              final title = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  UpperText('Categorias',
+                      style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                  UpperText('Gerencie categorias de entradas e saídas',
+                      style: GoogleFonts.inter(
+                          fontSize: 13, color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis),
+                ],
+              );
+              final actions = FilledButton.icon(
+                onPressed: _showCriarDialog,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const UpperText('Nova Categoria'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: _showCriarDialog,
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const UpperText('Nova Categoria'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            ),
+              );
+              if (compact) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  title, const SizedBox(height: 12), actions,
+                ]);
+              }
+              return Row(children: [
+                Expanded(child: title),
+                const SizedBox(width: 16),
+                actions,
+              ]);
+            }),
           ),
+
 
           // Content
           Expanded(
@@ -267,9 +277,10 @@ class _CategoriasPageState extends State<CategoriasPage> with AuthErrorMixin {
                           ],
                         ),
                       )
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.all(32),
+                    : LayoutBuilder(builder: (_, outer) => SingleChildScrollView(
+                        padding: EdgeInsets.all(outer.maxWidth < 560 ? 16 : 32),
                         child: LayoutBuilder(
+
                           builder: (context, constraints) {
                             if (constraints.maxWidth > 800) {
                               return Row(
@@ -308,8 +319,9 @@ class _CategoriasPageState extends State<CategoriasPage> with AuthErrorMixin {
                             );
                           },
                         ),
-                      ),
+                      )),
           ),
+
         ],
       ),
     );

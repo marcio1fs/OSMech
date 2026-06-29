@@ -48,6 +48,13 @@ app:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION:86400000}  # 24 horas
 
+# Dev/local: não exigir configuração de envio de e-mail
+# (evita falha de startup quando JavaMailSender não está configurado)
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
+
+
 # Actuator (health checks e metricas)
 management:
   endpoints:
@@ -60,11 +67,13 @@ management:
 
 # CORS
 cors:
-  allowed-origins: ${CORS_ORIGINS:http://localhost:8083,http://localhost:3000}
+  allowed-origins: ${CORS_ORIGINS:http://localhost:8083,http://localhost:3000,http://127.0.0.1:8080,http://localhost:8080}
 
 # Configuracao futura WhatsApp (Twilio / Meta)
+
 whatsapp:
   enabled: false
+
   provider: twilio  # twilio | meta
   twilio:
     account-sid: ""

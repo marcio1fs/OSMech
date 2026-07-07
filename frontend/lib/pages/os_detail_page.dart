@@ -86,6 +86,7 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                     DropdownMenuItem(value: 'CREDITO', child: UpperText('Cartão de Crédito')),
                     DropdownMenuItem(value: 'DEBITO', child: UpperText('Cartão de Débito')),
                     DropdownMenuItem(value: 'TRANSFERENCIA', child: UpperText('Transferência')),
+                    DropdownMenuItem(value: 'PRAZO_30_DIAS', child: UpperText('A Prazo (30 dias)')),
                   ],
                   onChanged: (v) {
                     setDialogState(() {
@@ -94,62 +95,40 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                   },
                 ),
                 const SizedBox(height: 20),
-                if (_os['whatsappConsentimento'] == true) ...[
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: UpperText(
-                      'Enviar recibo via WhatsApp',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w500),
-                    ),
-                    subtitle: UpperText(
-                      'Cliente autorizou mensagens',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                    value: enviarWhatsapp,
-                    onChanged: (v) => setDialogState(() => enviarWhatsapp = v),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: UpperText(
+                    'Enviar recibo via WhatsApp',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
                   ),
-                  if (enviarWhatsapp) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: TextEditingController(text: telefoneWhatsapp),
-                      decoration: InputDecoration(
-                        labelText: 'Telefone WhatsApp',
-                        hintText: '77999999999',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        prefixIcon: const Icon(Icons.phone_android),
-                      ),
-                      keyboardType: TextInputType.phone,
-                      onChanged: (v) => telefoneWhatsapp = v,
-                    ),
-                  ],
-                ] else
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: AppColors.warning, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: UpperText(
-                            'Cliente não autorizou envio de recibo via WhatsApp',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: AppColors.warning,
-                            ),
-                          ),
-                        ),
-                      ],
+                  subtitle: UpperText(
+                    _os['whatsappConsentimento'] == true
+                        ? 'Cliente autorizou mensagens'
+                        : 'Aviso: Cliente não autorizou mensagens no cadastro',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: _os['whatsappConsentimento'] == true ? AppColors.textMuted : AppColors.warning,
                     ),
                   ),
+                  value: enviarWhatsapp,
+                  onChanged: (v) => setDialogState(() => enviarWhatsapp = v),
+                ),
+                if (enviarWhatsapp) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: TextEditingController(text: telefoneWhatsapp),
+                    decoration: InputDecoration(
+                      labelText: 'Telefone WhatsApp',
+                      hintText: '77999999999',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: const Icon(Icons.phone_android),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    onChanged: (v) => telefoneWhatsapp = v,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 // Campo de desconto
                 UpperText(
@@ -421,7 +400,7 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                         const SizedBox(width: 10),
                       ],
                       UpperText(
-                        'Recibo da OS',
+                        _os['status'] == 'CONCLUIDA' ? 'Recibo da OS' : 'Orçamento da OS',
                         style: GoogleFonts.inter(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -527,25 +506,16 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
   }
 
   Future<void> _enviarReciboWhatsApp() async {
-    if (_os['whatsappConsentimento'] != true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: UpperText('Cliente não autorizou envio de mensagens via WhatsApp'),
-          backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
     String? telefoneWhatsapp = _os['clienteTelefone'];
+    final bool isOrcamento = _os['status'] != 'CONCLUIDA';
+    final String docTipo = isOrcamento ? 'Orçamento' : 'Recibo';
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: UpperText(
-            'Enviar Recibo via WhatsApp',
+            'Enviar $docTipo via WhatsApp',
             style: GoogleFonts.inter(fontWeight: FontWeight.w700),
           ),
           content: Column(
@@ -553,7 +523,7 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               UpperText(
-                'O recibo será enviado para o número:',
+                'O $docTipo será enviado para o número:',
                 style: GoogleFonts.inter(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 12),
@@ -570,6 +540,31 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                 keyboardType: TextInputType.phone,
                 onChanged: (v) => telefoneWhatsapp = v,
               ),
+              if (_os['whatsappConsentimento'] != true) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: UpperText(
+                          'Aviso: O cliente não autorizou mensagens de WhatsApp no cadastro.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -583,7 +578,9 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                     const SizedBox(width: 8),
                     Expanded(
                       child: UpperText(
-                        'O sistema tentará enviar o recibo mesmo que a OS já esteja encerrada.',
+                        isOrcamento
+                            ? 'O sistema enviará o orçamento com os serviços e peças atuais.'
+                            : 'O sistema tentará enviar o recibo mesmo que a OS já esteja encerrada.',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: AppColors.info,
@@ -618,7 +615,6 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
     try {
       final osService = OsService(token: safeToken);
       
-      // Use the new endpoint to send just the WhatsApp receipt
       final response = await osService.enviarReciboWhatsApp(
         _os['id'],
         telefoneWhatsapp: result['telefoneWhatsapp'],
@@ -629,7 +625,7 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
       if (response['enviado'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: UpperText('Recibo enviado via WhatsApp para ${response['destino']}'),
+            content: UpperText('$docTipo enviado via WhatsApp para ${response['destino']}'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -772,8 +768,24 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                       title: 'Financeiro',
                       icon: Icons.attach_money,
                       children: [
-                        _buildInfoRow('Valor Total', formatCurrency(_os['valor'] ?? 0),
-                            isTotal: true, valueColor: AppColors.success),
+                        if (_os['descontoPercentual'] != null &&
+                            ((_os['descontoPercentual'] as num).toDouble() > 0)) ...[
+                          _buildInfoRow('Subtotal', formatCurrency(_os['valor'] ?? 0)),
+                          _buildInfoRow(
+                            'Desconto (${(_os['descontoPercentual'] as num).toStringAsFixed(0)}%)',
+                            '- ${formatCurrency(((_os['valor'] ?? 0) as num).toDouble() * ((_os['descontoPercentual'] as num).toDouble()) / 100)}',
+                            valueColor: AppColors.error,
+                          ),
+                          _buildInfoRow(
+                            'Valor Pago',
+                            formatCurrency(_os['valorFinal'] ?? (_os['valor'] ?? 0)),
+                            isTotal: true,
+                            valueColor: AppColors.success,
+                          ),
+                        ] else ...[
+                          _buildInfoRow('Valor Total', formatCurrency(_os['valor'] ?? 0),
+                              isTotal: true, valueColor: AppColors.success),
+                        ],
                         _buildInfoRow('Criado em', _formatDateTime(_os['criadoEm'])),
                         if (_os['concluidoEm'] != null)
                           _buildInfoRow('Concluído em', _formatDateTime(_os['concluidoEm'])),
@@ -806,6 +818,48 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final osService = OsService(token: safeToken);
+                                final results = await Future.wait<dynamic>([
+                                  osService.obterRecibo(_os['id']),
+                                  _buscarLogoUrl(),
+                                ]);
+                                if (!mounted) return;
+                                _logoUrl = results[1] as String?;
+                                _mostrarRecibo(results[0] as String, false, logoUrl: _logoUrl);
+                              } catch (e) {
+                                if (!mounted) return;
+                                final double finalValue = (_os['descontoPercentual'] != null && (_os['descontoPercentual'] as num).toDouble() > 0)
+                                    ? (_os['valorFinal'] ?? _os['valor'] ?? 0).toDouble()
+                                    : (_os['valor'] ?? 0).toDouble();
+                                _logoUrl ??= await _buscarLogoUrl();
+                                if (!mounted) return;
+                                _mostrarRecibo('Orçamento da OS #${_os['id']}\n\nCliente: ${_os['clienteNome']}\nValor: ${formatCurrency(finalValue)}', false, logoUrl: _logoUrl);
+                              }
+                            },
+                            icon: const Icon(Icons.receipt_long),
+                            label: const UpperText('Ver Orçamento'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => _enviarReciboWhatsApp(),
+                            icon: const Icon(Icons.send),
+                            label: const UpperText('WhatsApp'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
 
                   if (status == 'CONCLUIDA') ...[
@@ -826,9 +880,12 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
 
                               } catch (e) {
                                 if (!mounted) return;
+                                final double finalValue = (_os['descontoPercentual'] != null && (_os['descontoPercentual'] as num).toDouble() > 0)
+                                    ? (_os['valorFinal'] ?? _os['valor'] ?? 0).toDouble()
+                                    : (_os['valor'] ?? 0).toDouble();
                                 _logoUrl ??= await _buscarLogoUrl();
                                 if (!mounted) return;
-                                _mostrarRecibo('Recibo da OS #${_os['id']}\n\nCliente: ${_os['clienteNome']}\nValor: ${formatCurrency(_os['valor'] ?? 0)}', false, logoUrl: _logoUrl);
+                                _mostrarRecibo('Recibo da OS #${_os['id']}\n\nCliente: ${_os['clienteNome']}\nValor: ${formatCurrency(finalValue)}', false, logoUrl: _logoUrl);
                               }
                             },
                             icon: const Icon(Icons.receipt_long),
@@ -886,9 +943,18 @@ class _OsDetailPageState extends State<OsDetailPage> with AuthErrorMixin {
               ],
             ),
           ),
-          UpperText(formatCurrency(_os['valor'] ?? 0),
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800,
-                  color: status == 'CONCLUIDA' ? AppColors.success : AppColors.textPrimary)),
+          UpperText(
+            formatCurrency(
+              (_os['descontoPercentual'] != null && (_os['descontoPercentual'] as num).toDouble() > 0)
+                  ? (_os['valorFinal'] ?? _os['valor'] ?? 0)
+                  : (_os['valor'] ?? 0),
+            ),
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: status == 'CONCLUIDA' ? AppColors.success : AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );

@@ -66,12 +66,15 @@ class OsmechApp extends StatelessWidget {
             SingleActivator(LogicalKeyboardKey.f1): _NavIntent(0),   // Dashboard
             SingleActivator(LogicalKeyboardKey.f2): _NavIntent(1),   // OS
             SingleActivator(LogicalKeyboardKey.f3): _NavIntent(2),   // Nova OS
-            SingleActivator(LogicalKeyboardKey.f4): _NavIntent(5),   // Mecânicos
-            SingleActivator(LogicalKeyboardKey.f6): _NavIntent(6),   // Financeiro
-            SingleActivator(LogicalKeyboardKey.f7): _NavIntent(11),  // Estoque
-            SingleActivator(LogicalKeyboardKey.f8): _NavIntent(15),  // IA
-            SingleActivator(LogicalKeyboardKey.f9): _NavIntent(18),  // Relatórios
-            SingleActivator(LogicalKeyboardKey.f10): _NavIntent(16), // Perfil
+            SingleActivator(LogicalKeyboardKey.f4): _NavIntent(3),   // Pagamentos
+            SingleActivator(LogicalKeyboardKey.f5): _NavIntent(4),   // Assinatura
+            SingleActivator(LogicalKeyboardKey.f6): _NavIntent(5),   // Mecânicos
+            SingleActivator(LogicalKeyboardKey.f7): _NavIntent(6),   // Financeiro
+            SingleActivator(LogicalKeyboardKey.f8): _NavIntent(11),  // Estoque
+            SingleActivator(LogicalKeyboardKey.f9): _NavIntent(15),  // IA OSMECH
+            SingleActivator(LogicalKeyboardKey.f10): _NavIntent(18), // Relatórios
+            SingleActivator(LogicalKeyboardKey.f11): _NavIntent(19), // Administração
+            SingleActivator(LogicalKeyboardKey.f12): _NavIntent(16), // Meu Perfil
           },
           child: Actions(
             actions: <Type, Action<Intent>>{

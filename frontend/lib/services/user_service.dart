@@ -67,4 +67,25 @@ class UserService {
       throw Exception(body['error'] ?? 'Erro ao alterar senha');
     }
   }
+
+  /// Faz o upload da logo da oficina.
+  Future<String> uploadLogo(List<int> bytes, String filename) async {
+    final response = await _api.multipart('/api/usuario/logo', fileField: 'file', fileBytes: bytes, filename: filename);
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      return body['logoUrl'];
+    }
+    final body = jsonDecode(response.body);
+    throw Exception(body['error'] ?? 'Erro ao fazer upload da logo');
+  }
+
+  /// Busca dados consolidados de usuários para a tela de administração.
+  Future<Map<String, dynamic>> getAdminDashboard() async {
+    final response = await _api.get('/api/admin/dashboard');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final body = jsonDecode(response.body);
+    throw Exception(body['error'] ?? 'Erro ao carregar dados do admin');
+  }
 }

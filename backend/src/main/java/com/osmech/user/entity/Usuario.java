@@ -61,6 +61,9 @@ public class Usuario {
     @Column(name = "endereco_cep")
     private String enderecoCep;
 
+    @Column(name = "logo_url")
+    private String logoUrl;
+
     /** Site da oficina */
     @Column(name = "site_oficina")
     private String siteOficina;

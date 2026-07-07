@@ -29,13 +29,29 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
     with AuthErrorMixin {
   Map<String, dynamic>? _resumo;
   List<Map<String, dynamic>> _ultimasTransacoes = [];
+  List<Map<String, dynamic>> _allTransacoes = [];
+  List<Map<String, dynamic>> _tendencia = [];
   bool _loading = true;
   String? _error;
+
+  DateTime? _dataInicio;
+  DateTime? _dataFim;
+
+  double? _entradasFiltradas;
+  double? _saidasFiltradas;
+  double? _lucroFiltrado;
+  int? _qtdTransacoesFiltradas;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  double _toDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
   }
 
   Future<void> _loadData() async {
@@ -48,11 +64,15 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
       final results = await Future.wait([
         service.getResumoFinanceiro(),
         service.listarTransacoes(),
+        service.getTendencia7Dias().catchError((_) => <Map<String, dynamic>>[]),
       ]);
       setState(() {
         _resumo = results[0] as Map<String, dynamic>;
-        final allTx = results[1] as List<Map<String, dynamic>>;
-        _ultimasTransacoes = allTx.take(5).toList();
+        _allTransacoes = results[1] as List<Map<String, dynamic>>;
+        _ultimasTransacoes = _allTransacoes.take(5).toList();
+        _tendencia = results[2] as List<Map<String, dynamic>>;
+        
+        _aplicarFiltroPeriodo();
         _loading = false;
       });
     } catch (e) {
@@ -63,6 +83,87 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
         });
       }
     }
+  }
+
+  void _aplicarFiltroPeriodo() {
+    if (_dataInicio == null || _dataFim == null) {
+      _entradasFiltradas = null;
+      _saidasFiltradas = null;
+      _lucroFiltrado = null;
+      _qtdTransacoesFiltradas = null;
+      return;
+    }
+
+    double entradas = 0;
+    double saidas = 0;
+    int count = 0;
+
+    final inicio = DateTime(_dataInicio!.year, _dataInicio!.month, _dataInicio!.day);
+    final fim = DateTime(_dataFim!.year, _dataFim!.month, _dataFim!.day, 23, 59, 59);
+
+    for (var tx in _allTransacoes) {
+      final dataStr = tx['dataMovimentacao'] ?? tx['data'];
+      if (dataStr == null) continue;
+      final dt = DateTime.tryParse(dataStr.toString());
+      if (dt == null) continue;
+
+      if (dt.isAfter(inicio.subtract(const Duration(seconds: 1))) &&
+          dt.isBefore(fim.add(const Duration(seconds: 1)))) {
+        final valor = double.tryParse(tx['valor']?.toString() ?? '0') ?? 0.0;
+        final tipo = tx['tipo']?.toString();
+
+        if (tipo == 'ENTRADA') {
+          entradas += valor;
+        } else if (tipo == 'SAIDA') {
+          saidas += valor;
+        }
+        count++;
+      }
+    }
+
+    _entradasFiltradas = entradas;
+    _saidasFiltradas = saidas;
+    _lucroFiltrado = entradas - saidas;
+    _qtdTransacoesFiltradas = count;
+  }
+
+  Future<void> _selecionarPeriodo() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _dataInicio != null && _dataFim != null
+          ? DateTimeRange(start: _dataInicio!, end: _dataFim!)
+          : null,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: AppColors.surface,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _dataInicio = picked.start;
+        _dataFim = picked.end;
+        _aplicarFiltroPeriodo();
+      });
+    }
+  }
+
+  void _limparFiltros() {
+    setState(() {
+      _dataInicio = null;
+      _dataFim = null;
+      _aplicarFiltroPeriodo();
+    });
   }
 
   @override
@@ -82,6 +183,10 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isCompact = constraints.maxWidth < 860;
+
+                final periodBtnText = _dataInicio != null && _dataFim != null
+                    ? '${formatDateBR(_dataInicio)} − ${formatDateBR(_dataFim)}'
+                    : 'Período';
 
                 if (isCompact) {
                   return Wrap(
@@ -118,6 +223,17 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
                               borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
+                      OutlinedButton.icon(
+                        onPressed: _selecionarPeriodo,
+                        icon: const Icon(Icons.date_range_rounded, size: 18),
+                        label: UpperText(periodBtnText),
+                      ),
+                      if (_dataInicio != null || _dataFim != null)
+                        IconButton(
+                          onPressed: _limparFiltros,
+                          icon: const Icon(Icons.clear_rounded, size: 20, color: AppColors.error),
+                          tooltip: 'Limpar filtros',
+                        ),
                       OutlinedButton.icon(
                         onPressed: _loadData,
                         icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -162,6 +278,17 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
                       ),
                     ),
                     OutlinedButton.icon(
+                      onPressed: _selecionarPeriodo,
+                      icon: const Icon(Icons.date_range_rounded, size: 18),
+                      label: UpperText(periodBtnText),
+                    ),
+                    if (_dataInicio != null || _dataFim != null)
+                      IconButton(
+                        onPressed: _limparFiltros,
+                        icon: const Icon(Icons.clear_rounded, size: 20, color: AppColors.error),
+                        tooltip: 'Limpar filtros',
+                      ),
+                    OutlinedButton.icon(
                       onPressed: _loadData,
                       icon: const Icon(Icons.refresh_rounded, size: 18),
                       label: const UpperText('Atualizar'),
@@ -203,6 +330,13 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
                             // Metric cards grid
                             LayoutBuilder(
                               builder: (context, constraints) {
+                                final isFiltrado = _dataInicio != null && _dataFim != null;
+                                final saldo = isFiltrado ? _lucroFiltrado : _resumo?['saldoAtual'];
+                                final entradas = isFiltrado ? _entradasFiltradas : _resumo?['entradasMes'];
+                                final saidas = isFiltrado ? _saidasFiltradas : _resumo?['saidasMes'];
+                                final lucro = isFiltrado ? _lucroFiltrado : _resumo?['lucroMes'];
+                                final qtdTransacoes = isFiltrado ? _qtdTransacoesFiltradas : _resumo?['qtdTransacoesMes'];
+
                                 final crossAxisCount =
                                     constraints.maxWidth > 1000
                                         ? 4
@@ -218,48 +352,49 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
                                   childAspectRatio: 2.4,
                                   children: [
                                     _MetricCard(
-                                      label: 'Saldo Atual',
-                                      value: formatCurrency(
-                                          _resumo?['saldoAtual']),
-                                      icon:
-                                          Icons.account_balance_wallet_rounded,
-                                      color: (_resumo?['saldoAtual'] ?? 0) >= 0
+                                      label: isFiltrado ? 'Saldo do Período' : 'Saldo Atual',
+                                      value: formatCurrency(saldo),
+                                      icon: Icons.account_balance_wallet_rounded,
+                                      color: _toDouble(saldo) >= 0
                                           ? AppColors.success
                                           : AppColors.error,
-                                      subtitle: 'Total acumulado',
+                                      subtitle: isFiltrado ? 'No período filtrado' : 'Total acumulado',
+                                      isFiltrado: isFiltrado,
                                     ),
                                     _MetricCard(
-                                      label: 'Entradas do Mês',
-                                      value: formatCurrency(
-                                          _resumo?['entradasMes']),
+                                      label: isFiltrado ? 'Entradas do Período' : 'Entradas do Mês',
+                                      value: formatCurrency(entradas),
                                       icon: Icons.trending_up_rounded,
                                       color: AppColors.success,
-                                      subtitle:
-                                          '${_resumo?['qtdTransacoesMes'] ?? 0} transações',
+                                      subtitle: isFiltrado ? '$qtdTransacoes lançamentos' : '${_resumo?['qtdTransacoesMes'] ?? 0} transações',
+                                      isFiltrado: isFiltrado,
                                     ),
                                     _MetricCard(
-                                      label: 'Saídas do Mês',
-                                      value:
-                                          formatCurrency(_resumo?['saidasMes']),
+                                      label: isFiltrado ? 'Saídas do Período' : 'Saídas do Mês',
+                                      value: formatCurrency(saidas),
                                       icon: Icons.trending_down_rounded,
                                       color: AppColors.error,
-                                      subtitle: 'Despesas atuais',
+                                      subtitle: isFiltrado ? 'Despesas do período' : 'Despesas atuais',
+                                      isFiltrado: isFiltrado,
                                     ),
                                     _MetricCard(
-                                      label: 'Lucro do Mês',
-                                      value:
-                                          formatCurrency(_resumo?['lucroMes']),
+                                      label: isFiltrado ? 'Lucro do Período' : 'Lucro do Mês',
+                                      value: formatCurrency(lucro),
                                       icon: Icons.show_chart_rounded,
-                                      color: (_resumo?['lucroMes'] ?? 0) >= 0
+                                      color: _toDouble(lucro) >= 0
                                           ? const Color(0xFF14B8A6)
                                           : AppColors.warning,
                                       subtitle: 'Entradas − Saídas',
+                                      isFiltrado: isFiltrado,
                                     ),
                                   ],
                                 );
                               },
                             ),
                             const SizedBox(height: 32),
+
+                            // Mini Gráfico de Tendência
+                            _buildTendenciaChart(),
 
                             // Two-column layout
                             LayoutBuilder(
@@ -442,6 +577,115 @@ class _FinancialDashboardPageState extends State<FinancialDashboardPage>
       ],
     );
   }
+
+  Widget _buildTendenciaChart() {
+    if (_tendencia.isEmpty) return const SizedBox.shrink();
+
+    final maxVal = _tendencia.fold<double>(0, (m, d) {
+      final e = _toDouble(d['entradas']);
+      final s = _toDouble(d['saidas']);
+      return [m, e, s].reduce((a, b) => a > b ? a : b);
+    });
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 32),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    UpperText(
+                      'Tendência dos Últimos 7 Dias',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    UpperText(
+                      'Comparativo diário de receitas e despesas',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Row(
+                children: [
+                  _LegendaDot(color: AppColors.success, label: 'Receitas'),
+                  const SizedBox(width: 16),
+                  _LegendaDot(color: AppColors.error, label: 'Saídas'),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 160,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: _tendencia.map((d) {
+                final entradas = _toDouble(d['entradas']);
+                final saidas = _toDouble(d['saidas']);
+                
+                final hE = maxVal > 0 ? (entradas / maxVal * 110) : 0.0;
+                final hS = maxVal > 0 ? (saidas / maxVal * 110) : 0.0;
+                
+                final data = d['data']?.toString() ?? '';
+                final dia = data.length >= 10 ? data.substring(8, 10) : '';
+                final mes = data.length >= 10 ? data.substring(5, 7) : '';
+                final labelData = '$dia/$mes';
+
+                return Expanded(
+                  child: Tooltip(
+                    message: 'Receitas: ${formatCurrency(entradas)}\nSaídas: ${formatCurrency(saidas)}',
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _Bar(height: hE, color: AppColors.success),
+                            const SizedBox(width: 4),
+                            _Bar(height: hS, color: AppColors.error),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        UpperText(
+                          labelData,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: AppColors.textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {
@@ -450,12 +694,14 @@ class _MetricCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String subtitle;
+  final bool isFiltrado;
   const _MetricCard(
       {required this.label,
       required this.value,
       required this.icon,
       required this.color,
-      required this.subtitle});
+      required this.subtitle,
+      this.isFiltrado = false});
 
   @override
   Widget build(BuildContext context) {
@@ -463,17 +709,25 @@ class _MetricCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
             ),
             child: Icon(icon, color: color, size: 24),
           ),
@@ -483,11 +737,34 @@ class _MetricCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                UpperText(label,
-                    style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: UpperText(label,
+                          style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    if (isFiltrado)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: UpperText(
+                          'FILTRADO',
+                          style: GoogleFonts.inter(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 UpperText(value,
                     style: GoogleFonts.inter(
@@ -495,6 +772,7 @@ class _MetricCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary),
                     overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
                 UpperText(subtitle,
                     style: GoogleFonts.inter(
                         fontSize: 11, color: AppColors.textMuted)),
@@ -503,6 +781,57 @@ class _MetricCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _Bar extends StatelessWidget {
+  final double height;
+  final Color color;
+  const _Bar({required this.height, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      width: 14,
+      height: height.clamp(2.0, 110.0),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+      ),
+    );
+  }
+}
+
+class _LegendaDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendaDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        UpperText(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

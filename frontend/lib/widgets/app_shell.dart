@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../main.dart' show globalNavNotifier;
@@ -23,6 +24,7 @@ import '../pages/stock_alerts_page.dart';
 import '../pages/chat_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/relatorios_page.dart';
+import '../pages/admin_dashboard_page.dart';
 import '../widgets/upper_text.dart';
 
 /// Shell principal com sidebar persistente para navegação web.
@@ -59,9 +61,33 @@ class _AppShellState extends State<AppShell> {
     if (idx != null && mounted) navigateTo(idx);
   }
 
-  /// Chamado pelos atalhos de teclado globais (F1-F10).
+  /// Chamado pelos atalhos de teclado globais (F1-F12).
   void navigateTo(int index) {
+    if (index < 0 || index >= _navItems.length) return;
+    final item = _navItems[index];
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final isAdmin = auth.role == 'ADMIN';
+    if (item.adminOnly && !isAdmin) {
+      return;
+    }
     setState(() => _selectedIndex = index);
+  }
+
+  void _navigateMenu(List<_VisibleNavItem> visibleItems, int offset) {
+    if (visibleItems.isEmpty) return;
+    int currentVisibleIdx = visibleItems.indexWhere((v) => v.originalIndex == _selectedIndex);
+    if (currentVisibleIdx == -1) {
+      currentVisibleIdx = 0;
+    }
+    int newVisibleIdx = currentVisibleIdx + offset;
+    if (newVisibleIdx < 0) {
+      newVisibleIdx = visibleItems.length - 1;
+    } else if (newVisibleIdx >= visibleItems.length) {
+      newVisibleIdx = 0;
+    }
+    setState(() {
+      _selectedIndex = visibleItems[newVisibleIdx].originalIndex;
+    });
   }
 
   final List<_NavItem> _navItems = const [
@@ -92,6 +118,11 @@ class _AppShellState extends State<AppShell> {
     _NavItem(icon: Icons.person_rounded, label: 'Meu Perfil', section: 'CONTA'),
     _NavItem(icon: Icons.workspace_premium_rounded, label: 'Planos'),
     _NavItem(icon: Icons.assessment_rounded, label: 'Relatórios', section: 'RELATORIOS'),
+    _NavItem(
+        icon: Icons.admin_panel_settings_rounded,
+        label: 'Administração',
+        section: 'ADMINISTRADOR',
+        adminOnly: true),
   ];
 
   Widget _getPage(int index) {
@@ -179,6 +210,8 @@ class _AppShellState extends State<AppShell> {
         return const PricingPage();
       case 18:
         return const RelatoriosPage();
+      case 19:
+        return const AdminDashboardPage();
       default:
         return DashboardPage(
             onNavigate: (i) => setState(() => _selectedIndex = i));
@@ -191,13 +224,51 @@ class _AppShellState extends State<AppShell> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
 
-    if (isMobile) {
-      return _buildMobileLayout(auth);
+    final isAdmin = auth.role == 'ADMIN';
+    final List<_VisibleNavItem> visibleItems = [];
+    for (int i = 0; i < _navItems.length; i++) {
+      final item = _navItems[i];
+      if (!item.adminOnly || isAdmin) {
+        visibleItems.add(_VisibleNavItem(originalIndex: i, item: item));
+      }
     }
-    return _buildDesktopLayout(auth);
+
+    Widget mainWidget;
+    if (isMobile) {
+      mainWidget = _buildMobileLayout(auth, visibleItems);
+    } else {
+      mainWidget = _buildDesktopLayout(auth, visibleItems);
+    }
+
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          final focusedContext = FocusManager.instance.primaryFocus?.context;
+          if (focusedContext != null) {
+            final focusedWidget = focusedContext.widget;
+            final isEditable = focusedWidget is EditableText ||
+                focusedContext.findAncestorWidgetOfExactType<EditableText>() != null;
+            if (isEditable) {
+              return KeyEventResult.ignored;
+            }
+          }
+
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            _navigateMenu(visibleItems, 1);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            _navigateMenu(visibleItems, -1);
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: mainWidget,
+    );
   }
 
-  Widget _buildDesktopLayout(AuthService auth) {
+  Widget _buildDesktopLayout(AuthService auth, List<_VisibleNavItem> visibleItems) {
     return Scaffold(
       body: Row(
         children: [
@@ -229,8 +300,8 @@ class _AppShellState extends State<AppShell> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: AppColors.accent,
-                          borderRadius: BorderRadius.circular(10),
+                           color: AppColors.primary,
+                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
                           Icons.build_rounded,
@@ -285,10 +356,11 @@ class _AppShellState extends State<AppShell> {
                   child: ListView.builder(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    itemCount: _navItems.length,
+                    itemCount: visibleItems.length,
                     itemBuilder: (context, index) {
-                      final item = _navItems[index];
-                      final selected = _selectedIndex == index;
+                      final visible = visibleItems[index];
+                      final item = visible.item;
+                      final selected = _selectedIndex == visible.originalIndex;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -318,7 +390,7 @@ class _AppShellState extends State<AppShell> {
                             label: item.label,
                             selected: selected,
                             expanded: _sidebarExpanded,
-                            onTap: () => setState(() => _selectedIndex = index),
+                            onTap: () => setState(() => _selectedIndex = visible.originalIndex),
                           ),
                         ],
                       );
@@ -423,7 +495,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildMobileLayout(AuthService auth) {
+  Widget _buildMobileLayout(AuthService auth, List<_VisibleNavItem> visibleItems) {
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -433,7 +505,7 @@ class _AppShellState extends State<AppShell> {
         selectedIndex: _selectedIndex > 4 ? 4 : _selectedIndex,
         onDestinationSelected: (i) {
           if (i == 4) {
-            _showMobileDrawer(auth);
+            _showMobileDrawer(auth, visibleItems);
           } else {
             setState(() => _selectedIndex = i);
           }
@@ -472,7 +544,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   /// Exibe bottom sheet com todas as seções de navegação no mobile.
-  void _showMobileDrawer(AuthService auth) {
+  void _showMobileDrawer(AuthService auth, List<_VisibleNavItem> visibleItems) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
@@ -553,14 +625,14 @@ class _AppShellState extends State<AppShell> {
                     controller: scrollController,
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
-                      // Itens a partir do index 4 (Assinatura)
-                      for (int i = 4; i < _navItems.length; i++) ...[
-                        if (_navItems[i].section != null)
+                      // Itens visíveis do drawer a partir do index 4
+                      for (final visible in visibleItems.where((v) => v.originalIndex >= 4)) ...[
+                        if (visible.item.section != null)
                           Padding(
                             padding: const EdgeInsets.only(
                                 left: 20, top: 16, bottom: 4),
                             child: UpperText(
-                              _navItems[i].section!,
+                              visible.item.section!,
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -570,24 +642,24 @@ class _AppShellState extends State<AppShell> {
                             ),
                           ),
                         ListTile(
-                          leading: Icon(_navItems[i].icon,
+                          leading: Icon(visible.item.icon,
                               size: 20,
-                              color: _selectedIndex == i
+                              color: _selectedIndex == visible.originalIndex
                                   ? AppColors.accent
                                   : AppColors.textSecondary),
                           title: UpperText(
-                            _navItems[i].label,
+                            visible.item.label,
                             style: GoogleFonts.inter(
                               fontSize: 14,
-                              fontWeight: _selectedIndex == i
+                              fontWeight: _selectedIndex == visible.originalIndex
                                   ? FontWeight.w600
                                   : FontWeight.w400,
-                              color: _selectedIndex == i
+                              color: _selectedIndex == visible.originalIndex
                                   ? AppColors.accent
                                   : AppColors.textPrimary,
                             ),
                           ),
-                          selected: _selectedIndex == i,
+                          selected: _selectedIndex == visible.originalIndex,
                           selectedTileColor:
                               AppColors.accent.withValues(alpha: 0.08),
                           shape: RoundedRectangleBorder(
@@ -596,7 +668,7 @@ class _AppShellState extends State<AppShell> {
                               const EdgeInsets.symmetric(horizontal: 20),
                           onTap: () {
                             Navigator.pop(ctx);
-                            setState(() => _selectedIndex = i);
+                            setState(() => _selectedIndex = visible.originalIndex);
                           },
                         ),
                       ],
@@ -616,7 +688,19 @@ class _NavItem {
   final IconData icon;
   final String label;
   final String? section;
-  const _NavItem({required this.icon, required this.label, this.section});
+  final bool adminOnly;
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    this.section,
+    this.adminOnly = false,
+  });
+}
+
+class _VisibleNavItem {
+  final int originalIndex;
+  final _NavItem item;
+  _VisibleNavItem({required this.originalIndex, required this.item});
 }
 
 class _SidebarItem extends StatefulWidget {

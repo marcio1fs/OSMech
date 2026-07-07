@@ -73,6 +73,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/api/planos/**").permitAll()
                 .requestMatchers("/mercadopago/webhook").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/uploads/logos/**", "/api/uploads/logos/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )

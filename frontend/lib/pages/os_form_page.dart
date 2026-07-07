@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,10 +8,14 @@ import '../services/auth_service.dart';
 import '../services/mecanico_service.dart';
 import '../services/os_service.dart';
 import '../services/stock_service.dart';
+import '../services/api_client.dart';
+import '../services/api_config.dart';
 import '../theme/app_theme.dart';
 import '../utils/receipt_print.dart';
 import '../mixins/auth_error_mixin.dart';
 import '../widgets/upper_text.dart';
+import 'os_form_components.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 /// Formulario de criação/edição de OS — com suporte a multiplos serviços e itens de estoque.
 class OsFormPage extends StatefulWidget {
@@ -40,6 +45,16 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
   bool _loading = false;
   bool _closingOs = false;
   bool _saved = false;
+  bool _formSubmitted = false;
+  bool _vendaRapida = false;
+
+  final _telefoneFormatter = MaskTextInputFormatter(
+      mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
+  
+  final _documentoFormatter = MaskTextInputFormatter(
+      mask: '###.###.###-##', 
+      filter: {"#": RegExp(r'[0-9]')},
+      type: MaskAutoCompletionType.lazy);
 
   // Serviços dinamicos
   final List<_ServicoEntry> _servicos = [];
@@ -239,43 +254,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     return norm;
   }
 
-  String _formatPhone(String value) {
-    final digits = _digitsOnly(value);
-    if (digits.isEmpty) return '';
-    final d = digits.length > 11 ? digits.substring(0, 11) : digits;
-    if (d.length <= 2) return '($d';
-    if (d.length <= 6) return '(${d.substring(0, 2)}) ${d.substring(2)}';
-    if (d.length <= 10) {
-      return '(${d.substring(0, 2)}) ${d.substring(2, 6)}-${d.substring(6)}';
-    }
-    return '(${d.substring(0, 2)}) ${d.substring(2, 7)}-${d.substring(7)}';
-  }
 
-  String _formatCpf(String value) {
-    final digits = _digitsOnly(value);
-    if (digits.isEmpty) return '';
-    final d = digits.length > 11 ? digits.substring(0, 11) : digits;
-    if (d.length <= 3) return d;
-    if (d.length <= 6) return '${d.substring(0, 3)}.${d.substring(3)}';
-    if (d.length <= 9) {
-      return '${d.substring(0, 3)}.${d.substring(3, 6)}.${d.substring(6)}';
-    }
-    return '${d.substring(0, 3)}.${d.substring(3, 6)}.${d.substring(6, 9)}-${d.substring(9)}';
-  }
-
-  String _formatCnpj(String value) {
-    final digits = _digitsOnly(value);
-    if (digits.isEmpty) return '';
-    final d = digits.length > 14 ? digits.substring(0, 14) : digits;
-    if (d.length <= 2) return d;
-    if (d.length <= 5) return '${d.substring(0, 2)}.${d.substring(2)}';
-    if (d.length <= 8)
-      return '${d.substring(0, 2)}.${d.substring(2, 5)}.${d.substring(5)}';
-    if (d.length <= 12) {
-      return '${d.substring(0, 2)}.${d.substring(2, 5)}.${d.substring(5, 8)}/${d.substring(8)}';
-    }
-    return '${d.substring(0, 2)}.${d.substring(2, 5)}.${d.substring(5, 8)}/${d.substring(8, 12)}-${d.substring(12)}';
-  }
 
   void _setMaskedText(TextEditingController controller, String value) {
     _applyingMask = true;
@@ -284,14 +263,6 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
       selection: TextSelection.collapsed(offset: value.length),
     );
     _applyingMask = false;
-  }
-
-  void _onTelefoneChanged() {
-    if (_applyingMask) return;
-    final masked = _formatPhone(_clienteTelefone.text);
-    if (_clienteTelefone.text != masked) {
-      _setMaskedText(_clienteTelefone, masked);
-    }
   }
 
   void _onPlacaChanged() {
@@ -360,30 +331,11 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
   }
 
   void _onDocumentoChanged() {
-    if (_applyingMask) return;
-    final masked = _formatDocumento(_clienteDocumento.text);
-    if (_clienteDocumento.text != masked) {
-      _setDocumentoMaskedText(masked);
-    }
-  }
-
-  void _setDocumentoMaskedText(String value) {
-    _applyingMask = true;
-    _clienteDocumento.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: value.length),
-    );
-    _applyingMask = false;
-  }
-
-  String _formatDocumento(String value) {
-    final digits = _digitsOnly(value);
-    if (digits.isEmpty) return '';
-    // If the digits are 11 or less, format as CPF, else as CNPJ (up to 14)
-    if (digits.length <= 11) {
-      return _formatCpf(digits);
-    } else {
-      return _formatCnpj(digits);
+    final digits = _digitsOnly(_clienteDocumento.text);
+    if (digits.length <= 11 && _documentoFormatter.getMask() != '###.###.###-##') {
+       _documentoFormatter.updateMask(mask: '###.###.###-##', filter: {"#": RegExp(r'[0-9]')});
+    } else if (digits.length > 11 && _documentoFormatter.getMask() != '##.###.###/####-##') {
+       _documentoFormatter.updateMask(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
     }
   }
 
@@ -398,6 +350,26 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     } else {
       return 'Documento inválido';
     }
+  }
+
+  void _toggleVendaRapida(bool value) {
+    setState(() {
+      _vendaRapida = value;
+      if (_vendaRapida) {
+        _clienteNome.text = 'Consumidor Final';
+        _clienteTelefone.text = '';
+        _placa.text = 'BALCAO';
+        _modelo.text = 'BALCAO';
+        _montadora.text = '';
+        _corVeiculo.text = '';
+        _ano.text = '';
+        _km.text = '';
+      } else {
+        if (_clienteNome.text == 'Consumidor Final') _clienteNome.text = '';
+        if (_placa.text == 'BALCAO') _placa.text = '';
+        if (_modelo.text == 'BALCAO') _modelo.text = '';
+      }
+    });
   }
 
   @override
@@ -418,10 +390,10 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     _diagnostico = TextEditingController(text: d?['diagnostico'] ?? '');
     _status = d?['status'] ?? 'ABERTA';
     _notificarWhatsApp = d?['whatsappConsentimento'] ?? false;
-    _clienteTelefone.addListener(_onTelefoneChanged);
+    final placaVal = d?['placa'] ?? '';
+    _vendaRapida = placaVal == 'BALCAO';
     _placa.addListener(_onPlacaChanged);
     _clienteDocumento.addListener(_onDocumentoChanged);
-    _onTelefoneChanged();
     _onDocumentoChanged();
     _onPlacaChanged();
 
@@ -644,7 +616,6 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
 
   @override
   void dispose() {
-    _clienteTelefone.removeListener(_onTelefoneChanged);
     _placa.removeListener(_onPlacaChanged);
     _clienteDocumento.removeListener(_onDocumentoChanged);
     _clienteNome.dispose();
@@ -850,6 +821,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
       final osService = OsService(token: safeToken);
       final response = await osService.encerrar(id, {
         'metodoPagamento': config.metodoPagamento,
+        'descontoPercentual': config.descontoPercentual,
         'enviarReciboWhatsapp': config.enviarWhatsapp,
         'telefoneWhatsapp': config.telefoneWhatsapp?.trim().isEmpty == true
             ? null
@@ -865,12 +837,15 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
       final recibo = (response['recibo'] ?? '').toString();
       final detalhe = (response['whatsappDetalhe'] ?? '').toString();
       final destinoWhatsapp = (response['whatsappDestino'] ?? '').toString();
+      final logoUrl = await _buscarLogoUrl();
+      
       await _mostrarReciboDialog(
         recibo,
         detalhe,
         telefoneWhatsapp: destinoWhatsapp.isNotEmpty
             ? destinoWhatsapp
             : _clienteTelefone.text,
+        logoUrl: logoUrl,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -897,6 +872,8 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     final telefoneController =
         TextEditingController(text: _clienteTelefone.text);
     final obsController = TextEditingController();
+    final descontoController = TextEditingController(text: '0');
+    double descontoPerc = 0;
     String metodoPagamento = 'PIX';
     bool enviarWhatsapp = _notificarWhatsApp;
 
@@ -908,48 +885,178 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
               style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
           content: SizedBox(
             width: 460,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: metodoPagamento,
-                  decoration:
-                      const InputDecoration(labelText: 'Forma de pagamento'),
-                  items: const [
-                    DropdownMenuItem(value: 'PIX', child: UpperText('PIX')),
-                    DropdownMenuItem(
-                        value: 'DINHEIRO', child: UpperText('Dinheiro')),
-                    DropdownMenuItem(value: 'CARTAO', child: UpperText('Cartão')),
-                    DropdownMenuItem(value: 'BOLETO', child: UpperText('Boleto')),
-                    DropdownMenuItem(
-                        value: 'TRANSFERENCIA', child: UpperText('Transferência')),
-                  ],
-                  onChanged: (v) =>
-                      setDialogState(() => metodoPagamento = v ?? 'PIX'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: obsController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Observações do pagamento (opcional)',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  value: enviarWhatsapp,
-                  onChanged: (v) => setDialogState(() => enviarWhatsapp = v),
-                  contentPadding: EdgeInsets.zero,
-                  title: const UpperText('Enviar recibo por WhatsApp'),
-                ),
-                if (enviarWhatsapp)
-                  TextField(
-                    controller: telefoneController,
-                    keyboardType: TextInputType.phone,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: metodoPagamento,
                     decoration:
-                        const InputDecoration(labelText: 'Telefone WhatsApp'),
+                        const InputDecoration(labelText: 'Forma de pagamento'),
+                    items: const [
+                      DropdownMenuItem(value: 'PIX', child: UpperText('PIX')),
+                      DropdownMenuItem(
+                          value: 'DINHEIRO', child: UpperText('Dinheiro')),
+                      DropdownMenuItem(value: 'CARTAO', child: UpperText('Cartão')),
+                      DropdownMenuItem(value: 'BOLETO', child: UpperText('Boleto')),
+                      DropdownMenuItem(
+                          value: 'TRANSFERENCIA', child: UpperText('Transferência')),
+                      DropdownMenuItem(
+                          value: 'PRAZO_30_DIAS', child: UpperText('A Prazo (30 dias)')),
+                    ],
+                    onChanged: (v) =>
+                        setDialogState(() => metodoPagamento = v ?? 'PIX'),
                   ),
-              ],
+                  const SizedBox(height: 16),
+                  UpperText(
+                    'Desconto (0% a 10%)',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: descontoController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.center,
+                          decoration: InputDecoration(
+                            suffixText: '%',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                          ),
+                          onChanged: (v) {
+                            final val = double.tryParse(v.replaceAll(',', '.')) ?? 0;
+                            setDialogState(() {
+                              descontoPerc = val.clamp(0.0, 10.0);
+                              if (val > 10) descontoController.text = '10';
+                              if (val < 0) descontoController.text = '0';
+                            });
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: descontoPerc.clamp(0.0, 10.0),
+                          min: 0,
+                          max: 10,
+                          divisions: 10,
+                          label: '${descontoPerc.toStringAsFixed(0)}%',
+                          activeColor: AppColors.primary,
+                          onChanged: (v) {
+                            setDialogState(() {
+                              descontoPerc = v;
+                              descontoController.text = v.toStringAsFixed(0);
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        UpperText(
+                          'Resumo dos Valores',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            UpperText('Valor total:', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                            UpperText(
+                              'R\$ ${_formatNum(_valorTotal)}',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            ),
+                          ],
+                        ),
+                        if (descontoPerc > 0) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: UpperText(
+                                  'Desconto (${descontoPerc.toStringAsFixed(0)}%):',
+                                  style: GoogleFonts.inter(color: AppColors.error, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              UpperText(
+                                '- R\$ ${_formatNum(_valorTotal * descontoPerc / 100)}',
+                                style: GoogleFonts.inter(color: AppColors.error, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              UpperText(
+                                'Valor final:',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: UpperText(
+                                  'R\$ ${_formatNum(_valorTotal * (1 - descontoPerc / 100))}',
+                                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.success, fontSize: 16),
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.end,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: obsController,
+                    maxLines: 2,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [UpperCaseTextFormatter()],
+                    decoration: const InputDecoration(
+                      labelText: 'Observações do pagamento (opcional)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    value: enviarWhatsapp,
+                    onChanged: (v) => setDialogState(() => enviarWhatsapp = v),
+                    contentPadding: EdgeInsets.zero,
+                    title: const UpperText('Enviar recibo por WhatsApp'),
+                  ),
+                  if (enviarWhatsapp)
+                    TextField(
+                      controller: telefoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration:
+                          const InputDecoration(labelText: 'Telefone WhatsApp'),
+                    ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -961,6 +1068,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                 ctx,
                 _EncerrarConfig(
                   metodoPagamento: metodoPagamento,
+                  descontoPercentual: descontoPerc,
                   enviarWhatsapp: enviarWhatsapp,
                   telefoneWhatsapp: telefoneController.text,
                   observacoes: obsController.text,
@@ -975,6 +1083,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
 
     telefoneController.dispose();
     obsController.dispose();
+    descontoController.dispose();
     return result;
   }
 
@@ -1012,10 +1121,25 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
     }
   }
 
-  Future<void> _imprimirRecibo(String recibo) async {
+  Future<String?> _buscarLogoUrl() async {
+    try {
+      final api = ApiClient(token: safeToken);
+      final response = await api.get('/api/usuario/perfil');
+      if (response.statusCode == 200) {
+        final profile = jsonDecode(response.body) as Map<String, dynamic>;
+        final logo = profile['logoUrl']?.toString();
+        if (logo != null && logo.isNotEmpty) {
+          return ApiConfig.absoluteUrl(logo);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _imprimirRecibo(String recibo, {String? logoUrl}) async {
     try {
       final id = widget.osData?['id'] ?? 'nova';
-      await printReceiptText(recibo, 'Recibo_OS_$id');
+      await printReceiptText(recibo, 'Recibo_OS_$id', logoUrl: logoUrl);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1028,7 +1152,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
   }
 
   Future<void> _mostrarReciboDialog(String recibo, String whatsappDetalhe,
-      {String? telefoneWhatsapp}) async {
+      {String? telefoneWhatsapp, String? logoUrl}) async {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -1047,17 +1171,18 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                         fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 8),
               ],
-              Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(maxHeight: 420),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: SingleChildScrollView(
-                  child: SelectableText(
+              Flexible(
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 420),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
                     recibo,
                     style: GoogleFonts.robotoMono(
                       fontSize: 12.5,
@@ -1066,6 +1191,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                     ),
                   ),
                 ),
+              ),
               ),
             ],
           ),
@@ -1078,7 +1204,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
             label: const UpperText('Enviar WhatsApp'),
           ),
           TextButton.icon(
-            onPressed: () => _imprimirRecibo(recibo),
+            onPressed: () => _imprimirRecibo(recibo, logoUrl: logoUrl),
             icon: const Icon(Icons.print_rounded, size: 16),
             label: const UpperText('Imprimir recibo'),
           ),
@@ -1104,15 +1230,19 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
   }
 
   Future<void> _salvar() async {
+    setState(() => _formSubmitted = true);
     if (!_formKey.currentState!.validate()) return;
 
-    // Validar que tem pelo menos um serviço com descrição
+    // Validar que tem pelo menos um serviço ou pelo menos um item de estoque
     final servicosValidos =
         _servicos.where((s) => s.descricao.text.trim().isNotEmpty).toList();
-    if (servicosValidos.isEmpty) {
+    final itensValidos =
+        _itensEstoque.where((i) => i.stockItemId != null).toList();
+
+    if (servicosValidos.isEmpty && itensValidos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: UpperText('Adicione pelo menos um serviço'),
+            content: UpperText('Adicione pelo menos um serviço ou item/peça'),
             backgroundColor: AppColors.error),
       );
       return;
@@ -1228,8 +1358,6 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 900;
-
                   final backButton = Navigator.canPop(context)
                       ? Padding(
                           padding: const EdgeInsets.only(right: 16),
@@ -1270,107 +1398,10 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                     ],
                   );
 
-                  final totalChip = Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.3)),
-                    ),
-                    child: UpperText(
-                      'Total: R\$ ${_valorTotal.toStringAsFixed(2).replaceAll('.', ',')}',
-                      style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent),
-                    ),
-                  );
-
-                  final cancelButton = OutlinedButton(
-                    onPressed: () async {
-                      if (await _confirmarSaida()) {
-                        if (context.mounted) Navigator.pop(context);
-                      }
-                    },
-                    child: const UpperText('Cancelar'),
-                  );
-
-                  final closeButton = _isEditing && _status != 'CONCLUIDA'
-                      ? FilledButton.icon(
-                          onPressed: (_loading || _closingOs)
-                              ? null
-                              : _encerrarOsPeloFormulario,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F766E),
-                          ),
-                          icon: _closingOs
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.receipt_long_rounded,
-                                  size: 18),
-                          label: const UpperText('Encerrar OS'),
-                        )
-                      : null;
-
-                  final saveButton = FilledButton.icon(
-                    onPressed: _loading ? null : _salvar,
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.save_rounded, size: 18),
-                    label: UpperText(_isEditing ? 'Salvar Alterações' : 'Criar OS'),
-                  );
-
-                  final actions = Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      totalChip,
-                      cancelButton,
-                      if (closeButton != null) closeButton,
-                      saveButton,
-                    ],
-                  );
-
-                  if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            backButton,
-                            Expanded(child: titleBlock),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        actions,
-                      ],
-                    );
-                  }
-
                   return Row(
                     children: [
                       backButton,
                       Expanded(child: titleBlock),
-                      const SizedBox(width: 16),
-                      Flexible(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: actions,
-                        ),
-                      ),
                     ],
                   );
                 },
@@ -1383,38 +1414,110 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                 padding: const EdgeInsets.all(32),
                 child: Form(
                   key: _formKey,
+                  autovalidateMode: _formSubmitted
+                      ? AutovalidateMode.onUserInteraction
+                      : AutovalidateMode.disabled,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 960),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Toggle Venda Rápida / Balcão
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 24),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          decoration: BoxDecoration(
+                            color: _vendaRapida 
+                                ? AppColors.accent.withValues(alpha: 0.08) 
+                                : AppColors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: _vendaRapida 
+                                  ? AppColors.accent 
+                                  : AppColors.border,
+                              width: _vendaRapida ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: _vendaRapida 
+                                      ? AppColors.accent 
+                                      : AppColors.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  Icons.point_of_sale_rounded,
+                                  color: _vendaRapida ? Colors.white : AppColors.textSecondary,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    UpperText(
+                                      'Venda Rápida (Balcão / PDV)',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    UpperText(
+                                      'Ative para vender peças/itens diretamente sem necessidade de veículo ou serviços',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _vendaRapida,
+                                activeTrackColor: AppColors.accent.withValues(alpha: 0.5),
+                                activeColor: AppColors.accent,
+                                onChanged: (val) => _toggleVendaRapida(val),
+                              ),
+                            ],
+                          ),
+                        ),
                         // Section: Cliente
-                        const _SectionHeader(
+                        const OsSectionHeader(
                             icon: Icons.person_outline_rounded,
                             title: 'Dados do Cliente'),
                         const SizedBox(height: 16),
-                        _CardSection(
+                        OsCardSection(
                           children: [
                             Row(
                               children: [
                                 Expanded(
                                   flex: 2,
-                                  child: _Field(
+                                  child: OsField(
                                       label: 'Nome do Cliente',
                                       controller: _clienteNome,
                                       required: true),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
-                                  child: _Field(
+                                  child: OsField(
                                       label: 'Telefone (WhatsApp)',
                                       controller: _clienteTelefone,
-                                      required: true,
+                                      required: !_vendaRapida,
                                       keyboard: TextInputType.phone,
+                                      inputFormatters: [_telefoneFormatter],
                                       validator: (v) {
                                         final value = (v ?? '').trim();
-                                        if (value.isEmpty)
+                                        if (value.isEmpty) {
+                                          if (_vendaRapida) return null;
                                           return 'Campo obrigatório';
+                                        }
                                         if (!_isValidTelefone(value)) {
                                           return 'Telefone inválido (use DDD + número)';
                                         }
@@ -1428,15 +1531,14 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                               children: [
                                 Expanded(
                                   flex: 2,
-                                  child: _Field(
+                                  child: OsField(
                                     label: 'CPF/CNPJ',
                                     controller: _clienteDocumento,
                                     keyboard: TextInputType.number,
                                     validator: _validateDocumento,
                                     hintText: '000.000.000-00 ou 00.000.000/0000-00',
                                     inputFormatters: [
-                                      FilteringTextInputFormatter.allow(
-                                          RegExp(r'\d')),
+                                      _documentoFormatter,
                                     ],
                                   ),
                                 ),
@@ -1452,87 +1554,91 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                         ),
                         const SizedBox(height: 28),
 
-                        // Section: Veiculo
-                        const _SectionHeader(
-                            icon: Icons.directions_car_outlined,
-                            title: 'Dados do Veículo'),
-                        const SizedBox(height: 16),
-                        _CardSection(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                    child: _Field(
-                                        label: 'Placa',
-                                        controller: _placa,
-                                        required: true,
-                                        hintText: 'ABC-1234',
-                                        inputFormatters: [
-                                          FilteringTextInputFormatter.allow(
-                                              RegExp(r'[A-Za-z0-9\-]')),
-                                        ],
-                                        validator: (v) {
-                                          final value = (v ?? '').trim();
-                                          if (value.isEmpty) {
-                                            return 'Campo obrigatório';
-                                          }
-                                          if (!_isValidPlaca(value)) {
-                                            return 'Placa inválida';
-                                          }
-                                          return null;
-                                        })),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _MontadoraField(
-                                    controller: _montadora,
-                                    opcoes: _montadorasDisponiveis,
-                                    onCarregar: () => _carregarMontadoras(),
+                        if (!_vendaRapida) ...[
+                          // Section: Veiculo
+                          const OsSectionHeader(
+                              icon: Icons.directions_car_outlined,
+                              title: 'Dados do Veículo'),
+                          const SizedBox(height: 16),
+                          OsCardSection(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: OsField(
+                                          label: 'Placa',
+                                          controller: _placa,
+                                          required: true,
+                                          hintText: 'ABC-1234',
+                                          inputFormatters: [
+                                            FilteringTextInputFormatter.allow(
+                                                RegExp(r'[A-Za-z0-9\-]')),
+                                          ],
+                                          validator: (v) {
+                                            if (_vendaRapida) return null;
+                                            final value = (v ?? '').trim();
+                                            if (value.isEmpty) {
+                                              return 'Campo obrigatório';
+                                            }
+                                            if (!_isValidPlaca(value)) {
+                                              return 'Placa inválida';
+                                            }
+                                            return null;
+                                          })),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: OsMontadoraField(
+                                      controller: _montadora,
+                                      opcoes: _montadorasDisponiveis,
+                                      onCarregar: () => _carregarMontadoras(),
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                    child: _Field(
-                                        label: 'Modelo',
-                                        controller: _modelo,
-                                        required: true)),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                    child: _Field(
-                                        label: 'Quilometragem',
-                                        controller: _km,
-                                        keyboard: TextInputType.number)),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                    child: _Field(
-                                        label: 'Ano',
-                                        controller: _ano,
-                                        keyboard: TextInputType.number)),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                    child: _Field(
-                                  label: 'Cor do veículo',
-                                  controller: _corVeiculo,
-                                )),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: OsField(
+                                          label: 'Modelo',
+                                          controller: _modelo,
+                                          required: true)),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                      child: OsField(
+                                          label: 'Quilometragem',
+                                          controller: _km,
+                                          keyboard: TextInputType.number)),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: OsField(
+                                          label: 'Ano',
+                                          controller: _ano,
+                                          keyboard: TextInputType.number)),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                      child: OsField(
+                                    label: 'Cor do veículo',
+                                    controller: _corVeiculo,
+                                  )),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 28),
+                        ],
 
                         // Section: Servicos
                         Row(
                           children: [
-                            const _SectionHeader(
-                                icon: Icons.build_outlined, title: 'Serviços'),
-                            const Spacer(),
+                            const Expanded(
+                              child: OsSectionHeader(
+                                  icon: Icons.build_outlined, title: 'Serviços'),
+                            ),
                             FilledButton.icon(
                               onPressed: _adicionarServico,
                               icon: const Icon(Icons.add_rounded, size: 18),
@@ -1545,7 +1651,15 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        ..._buildServicosCards(),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          alignment: Alignment.topCenter,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: _buildServicosCards(),
+                          ),
+                        ),
                         if (_servicos.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Align(
@@ -1572,10 +1686,11 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                         // Section: Itens de Estoque
                         Row(
                           children: [
-                            const _SectionHeader(
-                                icon: Icons.inventory_2_outlined,
-                                title: 'Itens do Estoque'),
-                            const Spacer(),
+                            const Expanded(
+                              child: OsSectionHeader(
+                                  icon: Icons.inventory_2_outlined,
+                                  title: 'Itens do Estoque'),
+                            ),
                             if (_loadingStock)
                               const SizedBox(
                                 width: 20,
@@ -1596,7 +1711,15 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        ..._buildItensEstoqueCards(),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          alignment: Alignment.topCenter,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: _buildItensEstoqueCards(),
+                          ),
+                        ),
                         if (_itensEstoque.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Align(
@@ -1619,7 +1742,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                           ),
                         ],
                         if (_itensEstoque.isEmpty)
-                          _CardSection(
+                          OsCardSection(
                             children: [
                               Center(
                                 child: UpperText(
@@ -1634,13 +1757,13 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                         const SizedBox(height: 28),
 
                         // Section: Diagnostico e Status
-                        const _SectionHeader(
+                        const OsSectionHeader(
                             icon: Icons.assignment_outlined,
                             title: 'Diagnóstico e Status'),
                         const SizedBox(height: 16),
-                        _CardSection(
+                        OsCardSection(
                           children: [
-                            _Field(
+                            OsField(
                                 label: 'Diagnóstico',
                                 controller: _diagnostico,
                                 maxLines: 3),
@@ -1659,6 +1782,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                                               color: AppColors.textPrimary)),
                                       const SizedBox(height: 8),
                                       DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: _status,
                                         decoration: const InputDecoration(),
                                         items: _statusPermitidos
@@ -1746,6 +1870,101 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
             ),
           ],
         ),
+        bottomNavigationBar: _buildBottomBar(),
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    final totalChip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+      ),
+      child: UpperText(
+        'Total: R\$ ${_valorTotal.toStringAsFixed(2).replaceAll('.', ',')}',
+        style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: AppColors.accent),
+      ),
+    );
+
+    final cancelButton = OutlinedButton(
+      onPressed: () async {
+        if (await _confirmarSaida()) {
+          if (mounted) Navigator.pop(context);
+        }
+      },
+      child: const UpperText('Cancelar'),
+    );
+
+    final closeButton = _isEditing && _status != 'CONCLUIDA'
+        ? FilledButton.icon(
+            onPressed: (_loading || _closingOs)
+                ? null
+                : _encerrarOsPeloFormulario,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F766E),
+            ),
+            icon: _closingOs
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.receipt_long_rounded, size: 18),
+            label: const UpperText('Encerrar OS'),
+          )
+        : null;
+
+    final saveButton = FilledButton.icon(
+      onPressed: _loading ? null : _salvar,
+      icon: _loading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white))
+          : const Icon(Icons.save_rounded, size: 18),
+      label: UpperText(_isEditing ? 'Salvar Alterações' : 'Criar OS'),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: const Border(top: BorderSide(color: AppColors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          totalChip,
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              cancelButton,
+              if (closeButton != null) closeButton,
+              saveButton,
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1788,17 +2007,22 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  UpperText('Serviço ${index + 1}',
+                  Expanded(
+                    child: UpperText('Serviço ${index + 1}',
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
+                  ),
+                  Flexible(
+                    child: UpperText(
+                      'R\$ ${total.toStringAsFixed(2).replaceAll('.', ',')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary)),
-                  const Spacer(),
-                  UpperText(
-                    'R\$ ${total.toStringAsFixed(2).replaceAll('.', ',')}',
-                    style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.accent),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: AppColors.accent),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   if (_servicos.length > 1)
@@ -1816,26 +2040,26 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                 children: [
                   Expanded(
                     flex: 3,
-                    child: _Field(
+                    child: OsField(
                         label: 'Descrição do Serviço',
                         controller: s.descricao,
-                        required: true),
+                        required: !_vendaRapida && _itensEstoque.where((i) => i.stockItemId != null).isEmpty),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _Field(
+                    child: OsField(
                         label: 'Qtd',
                         controller: s.quantidade,
-                        required: true,
+                        required: s.descricao.text.trim().isNotEmpty,
                         keyboard: TextInputType.number,
                         onChanged: () => setState(() {})),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _Field(
+                    child: OsField(
                         label: 'Valor Unit. (R\$)',
                         controller: s.valorUnitario,
-                        required: true,
+                        required: s.descricao.text.trim().isNotEmpty,
                         keyboard: TextInputType.number,
                         onChanged: () => setState(() {})),
                   ),
@@ -1847,14 +2071,23 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                 children: [
                   Expanded(
                     flex: 2,
-                    child: DropdownButtonFormField<int?>(
-                      value: _mecanicos.any((m) => (m['id'] as num).toInt() == s.mecanicoId)
-                          ? s.mecanicoId
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Mecanico do Servico',
-                        border: OutlineInputBorder(),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        UpperText('Mecânico do Serviço',
+                            style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<int?>(
+                          isExpanded: true,
+                          value: _mecanicos.any((m) => (m['id'] as num).toInt() == s.mecanicoId)
+                              ? s.mecanicoId
+                              : null,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                          ),
                       items: [
                         const DropdownMenuItem<int?>(
                           value: null,
@@ -1883,10 +2116,12 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                         });
                       },
                     ),
-                  ),
+                  ],
+                ),
+              ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _Field(
+                    child: OsField(
                       label: 'Comissao (%)',
                       controller: s.percentualComissao,
                       keyboard: const TextInputType.numberWithOptions(
@@ -1962,25 +2197,30 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      UpperText(i.nomeItem,
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary)),
-                      UpperText('Código: ${i.codigoItem}',
-                          style: GoogleFonts.inter(
-                              fontSize: 12, color: AppColors.textSecondary)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        UpperText(i.nomeItem,
+                            style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                        UpperText('Código: ${i.codigoItem}',
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
-                  UpperText(
-                    'R\$ ${total.toStringAsFixed(2).replaceAll('.', ',')}',
-                    style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: const Color(0xFF8B5CF6)),
+                  Flexible(
+                    child: UpperText(
+                      'R\$ ${total.toStringAsFixed(2).replaceAll('.', ',')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: const Color(0xFF8B5CF6)),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   IconButton(
@@ -1993,6 +2233,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
               ),
               const SizedBox(height: 16),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   if (i.estoqueDisponivel != null)
                     Container(
@@ -2012,7 +2253,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                     ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _Field(
+                    child: OsField(
                         label: 'Quantidade',
                         controller: i.quantidade,
                         required: true,
@@ -2021,7 +2262,7 @@ class _OsFormPageState extends State<OsFormPage> with AuthErrorMixin {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _Field(
+                    child: OsField(
                         label: 'Valor Unit. (R\$)',
                         controller: i.valorUnitario,
                         required: true,
@@ -2093,12 +2334,14 @@ class _ItemEstoqueEntry {
 
 class _EncerrarConfig {
   final String metodoPagamento;
+  final double descontoPercentual;
   final bool enviarWhatsapp;
   final String? telefoneWhatsapp;
   final String? observacoes;
 
   _EncerrarConfig({
     required this.metodoPagamento,
+    required this.descontoPercentual,
     required this.enviarWhatsapp,
     this.telefoneWhatsapp,
     this.observacoes,
@@ -2107,192 +2350,4 @@ class _EncerrarConfig {
 
 // ============ Widgets ============
 
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  const _SectionHeader({required this.icon, required this.title});
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: AppColors.accent),
-        const SizedBox(width: 10),
-        UpperText(title,
-            style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary)),
-      ],
-    );
-  }
-}
-
-class _CardSection extends StatelessWidget {
-  final List<Widget> children;
-  const _CardSection({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
-}
-
-class _MontadoraField extends StatelessWidget {
-  final TextEditingController controller;
-  final List<String> opcoes;
-  final VoidCallback onCarregar;
-
-  const _MontadoraField({
-    required this.controller,
-    required this.opcoes,
-    required this.onCarregar,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        UpperText('Montadora',
-            style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
-        const SizedBox(height: 8),
-        Autocomplete<String>(
-          initialValue: TextEditingValue(text: controller.text),
-          optionsBuilder: (textEditingValue) {
-            onCarregar();
-            final query = textEditingValue.text.trim().toLowerCase();
-            if (query.isEmpty) return opcoes;
-            return opcoes.where(
-                (m) => m.toLowerCase().contains(query));
-          },
-          onSelected: (value) => controller.text = value,
-          fieldViewBuilder: (ctx, fieldController, focusNode, onSubmit) {
-            // Sincroniza o controller externo com o interno do Autocomplete
-            fieldController.text = controller.text;
-            fieldController.addListener(() {
-              controller.text = fieldController.text;
-            });
-            return TextFormField(
-              controller: fieldController,
-              focusNode: focusNode,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                suffixIcon: Icon(Icons.arrow_drop_down_rounded),
-              ),
-              onFieldSubmitted: (_) => onSubmit(),
-            );
-          },
-          optionsViewBuilder: (ctx, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(10),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 240, maxWidth: 280),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: options.length,
-                    itemBuilder: (_, i) {
-                      final opt = options.elementAt(i);
-                      return InkWell(
-                        onTap: () => onSelected(opt),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          child: UpperText(opt,
-                              style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: AppColors.textPrimary)),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _Field extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final bool required;
-  final int maxLines;
-  final TextInputType? keyboard;
-  final VoidCallback? onChanged;
-  final VoidCallback? onTap;
-  final bool readOnly;
-  final Widget? suffixIcon;
-  final String? Function(String?)? validator;
-  final List<TextInputFormatter>? inputFormatters;
-  final String? hintText;
-  const _Field(
-      {required this.label,
-      required this.controller,
-      this.required = false,
-      this.maxLines = 1,
-      this.keyboard,
-      this.onChanged,
-      this.onTap,
-      this.readOnly = false,
-      this.suffixIcon,
-      this.validator,
-      this.inputFormatters,
-      this.hintText});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        UpperText(label,
-            style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: keyboard,
-          inputFormatters: inputFormatters,
-          textInputAction:
-              maxLines == 1 ? TextInputAction.next : TextInputAction.newline,
-          readOnly: readOnly,
-          onTap: onTap,
-          onFieldSubmitted: (_) {
-            if (maxLines == 1) {
-              FocusScope.of(context).nextFocus();
-            }
-          },
-          decoration: InputDecoration(suffixIcon: suffixIcon, hintText: hintText),
-          onChanged: onChanged != null ? (_) => onChanged!() : null,
-          validator: validator ??
-              (required
-                  ? (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null
-                  : null),
-        ),
-      ],
-    );
-  }
-}

@@ -31,6 +31,7 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
   String? _error;
   String? _filtroCategoria;
   final TextEditingController _buscaCtrl = TextEditingController();
+  final ScrollController _horizontalScrollController = ScrollController();
 
   static const List<String> _categorias = [
     'MOTOR',
@@ -93,6 +94,7 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
   @override
   void dispose() {
     _buscaCtrl.dispose();
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -237,6 +239,7 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
               );
 
               final searchField = SizedBox(
+                width: 220,
                 height: 38,
                 child: TextField(
                   controller: _buscaCtrl,
@@ -389,11 +392,17 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
                           )
                         : SingleChildScrollView(
                             padding: const EdgeInsets.all(32),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: _tableWidth,
-                                child: _buildTable(),
+                            child: Scrollbar(
+                              controller: _horizontalScrollController,
+                              thumbVisibility: true,
+                              trackVisibility: true,
+                              child: SingleChildScrollView(
+                                controller: _horizontalScrollController,
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: _tableWidth,
+                                  child: _buildTable(),
+                                ),
                               ),
                             ),
                           ),
@@ -418,13 +427,8 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
               color: AppColors.surfaceVariant,
               borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
             ),
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                  child: Row(
-                    children: [
+            child: Row(
+              children: [
                 _colHeader('Codigo', width: _colCodigoWidth),
                 _colHeader('Nome', width: _colNomeWidth),
                 _colHeader('Categoria', width: _colCategoriaWidth),
@@ -434,10 +438,7 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
                 _colHeader('Custo', width: _colCustoWidth),
                 _colHeader('Venda', width: _colVendaWidth),
                 _colHeader('Acoes', width: _colAcoesWidth),
-                    ],
-                  ),
-                ),
-              ),
+              ],
             ),
           ),
           ...List.generate(_itens.length, (i) {
@@ -472,26 +473,58 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
                   _colCell(item['marca'] ?? '', width: _colMarcaWidth),
                   SizedBox(
                     width: _colQtdWidth,
-                    child: Row(
-                      children: [
-                        if (estoqueZerado)
-                          const Icon(Icons.error_rounded, size: 14, color: AppColors.error)
-                        else if (estoqueBaixo)
-                          const Icon(Icons.warning_rounded, size: 14, color: AppColors.warning),
-                        if (estoqueBaixo || estoqueZerado) const SizedBox(width: 4),
-                        UpperText(
-                          '${item['quantidade']}',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: estoqueZerado
+                              ? AppColors.error.withValues(alpha: 0.15)
+                              : estoqueBaixo
+                                  ? AppColors.warning.withValues(alpha: 0.15)
+                                  : AppColors.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
                             color: estoqueZerado
-                                ? AppColors.error
+                                ? AppColors.error.withValues(alpha: 0.3)
                                 : estoqueBaixo
-                                    ? AppColors.warning
-                                    : AppColors.textPrimary,
+                                    ? AppColors.warning.withValues(alpha: 0.3)
+                                    : AppColors.success.withValues(alpha: 0.2),
+                            width: 0.8,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              estoqueZerado
+                                  ? Icons.error_outline_rounded
+                                  : estoqueBaixo
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.check_circle_outline_rounded,
+                              size: 12,
+                              color: estoqueZerado
+                                  ? AppColors.error
+                                  : estoqueBaixo
+                                      ? AppColors.warning
+                                      : AppColors.success,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${item['quantidade']}',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: estoqueZerado
+                                    ? AppColors.error
+                                    : estoqueBaixo
+                                        ? AppColors.warning
+                                        : AppColors.success,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                   _colCell('${item['quantidadeMinima']}', width: _colMinWidth),
@@ -530,8 +563,8 @@ class _StockListPageState extends State<StockListPage> with AuthErrorMixin {
         text,
         style: GoogleFonts.inter(
           fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textMuted,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
           letterSpacing: 0.5,
         ),
       ),

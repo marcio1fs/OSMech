@@ -17,6 +17,27 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+
+import com.lowagie.text.Document;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.pdf.PdfPCell;
+import java.awt.Color;
+import java.util.ArrayList;
+
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -564,21 +585,167 @@ public class RelatorioService {
     // ==================== EXPORTAÇÃO ====================
 
     /**
-     * Gera CSV real com dados do relatório solicitado.
-     * PDF e Excel também geram CSV por ora (sem dependência extra).
+     * Gera PDF real com dados do relatório solicitado.
      */
     public ByteArrayOutputStream exportarParaPdf(String tipo, LocalDate inicio, LocalDate fim, String formato) {
-        String csv = exportarParaCsv(tipo, inicio, fim);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try { out.write(csv.getBytes("UTF-8")); } catch (Exception e) { log.error("Erro ao gerar PDF", e); }
+        try {
+            String csv = exportarParaCsv(tipo, inicio, fim);
+            // Remove UTF-8 BOM if present
+            if (csv.startsWith("\uFEFF")) {
+                csv = csv.substring(1);
+            }
+            
+            Document document = new Document();
+            PdfWriter.getInstance(document, out);
+            document.open();
+            
+            // Title
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, Color.DARK_GRAY);
+            String titleText = String.format("Relatório de %s", tipo.toUpperCase());
+            document.add(new Paragraph(titleText, titleFont));
+            
+            // Subtitle
+            Font subFont = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.GRAY);
+            String subText = String.format("Período: %s a %s | Gerado em: %s\n\n", 
+                inicio != null ? inicio : "Início", 
+                fim != null ? fim : "Fim", 
+                LocalDate.now());
+            document.add(new Paragraph(subText, subFont));
+            
+            // Table
+            String[] lines = csv.split("\n");
+            if (lines.length > 0) {
+                String[] headers = parseCsvLine(lines[0]);
+                PdfPTable table = new PdfPTable(headers.length);
+                table.setWidthPercentage(100);
+                
+                // Headers styling
+                Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.WHITE);
+                for (String header : headers) {
+                    PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+                    cell.setBackgroundColor(new Color(249, 115, 22)); // Orange primary accent
+                    cell.setPadding(6);
+                    table.addCell(cell);
+                }
+                
+                // Rows styling
+                Font rowFont = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.BLACK);
+                for (int i = 1; i < lines.length; i++) {
+                    if (lines[i].trim().isEmpty()) continue;
+                    String[] cols = parseCsvLine(lines[i]);
+                    for (int j = 0; j < headers.length; j++) {
+                        String val = j < cols.length ? cols[j] : "";
+                        PdfPCell cell = new PdfPCell(new Phrase(val, rowFont));
+                        cell.setPadding(5);
+                        // Alternating background colors
+                        if (i % 2 == 0) {
+                            cell.setBackgroundColor(new Color(241, 245, 249)); // Slate-100
+                        }
+                        table.addCell(cell);
+                    }
+                }
+                document.add(table);
+            }
+            
+            document.close();
+        } catch (Exception e) {
+            log.error("Erro ao gerar PDF", e);
+        }
         return out;
     }
 
+    /**
+     * Gera Excel XLSX real com dados do relatório solicitado.
+     */
     public ByteArrayOutputStream exportarParaExcel(String tipo, LocalDate inicio, LocalDate fim) {
-        String csv = exportarParaCsv(tipo, inicio, fim);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try { out.write(csv.getBytes("UTF-8")); } catch (Exception e) { log.error("Erro ao gerar Excel", e); }
+        try (Workbook workbook = new XSSFWorkbook()) {
+            String csv = exportarParaCsv(tipo, inicio, fim);
+            // Remove UTF-8 BOM if present
+            if (csv.startsWith("\uFEFF")) {
+                csv = csv.substring(1);
+            }
+            
+            Sheet sheet = workbook.createSheet("Relatório");
+            
+            String[] lines = csv.split("\n");
+            if (lines.length > 0) {
+                // Header style
+                CellStyle headerStyle = workbook.createCellStyle();
+                headerStyle.setFillForegroundColor(IndexedColors.ORANGE.getIndex());
+                headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setColor(IndexedColors.WHITE.getIndex());
+                headerStyle.setFont(headerFont);
+                
+                // Row cell style
+                CellStyle cellStyle = workbook.createCellStyle();
+                cellStyle.setBorderBottom(BorderStyle.THIN);
+                cellStyle.setBorderTop(BorderStyle.THIN);
+                cellStyle.setBorderLeft(BorderStyle.THIN);
+                cellStyle.setBorderRight(BorderStyle.THIN);
+                
+                String[] headers = parseCsvLine(lines[0]);
+                Row headerRow = sheet.createRow(0);
+                for (int j = 0; j < headers.length; j++) {
+                    Cell cell = headerRow.createCell(j);
+                    cell.setCellValue(headers[j]);
+                    cell.setCellStyle(headerStyle);
+                }
+                
+                for (int i = 1; i < lines.length; i++) {
+                    if (lines[i].trim().isEmpty()) continue;
+                    Row row = sheet.createRow(i);
+                    String[] cols = parseCsvLine(lines[i]);
+                    for (int j = 0; j < headers.length; j++) {
+                        Cell cell = row.createCell(j);
+                        String val = j < cols.length ? cols[j] : "";
+                        cell.setCellValue(val);
+                        cell.setCellStyle(cellStyle);
+                    }
+                }
+                
+                // Auto size columns
+                for (int j = 0; j < headers.length; j++) {
+                    sheet.autoSizeColumn(j);
+                }
+            }
+            
+            workbook.write(out);
+        } catch (Exception e) {
+            log.error("Erro ao gerar Excel", e);
+        }
         return out;
+    }
+
+    private String[] parseCsvLine(String line) {
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++; // skip next double quote
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (c == ',') {
+                if (inQuotes) {
+                    current.append(c);
+                } else {
+                    result.add(current.toString());
+                    current.setLength(0);
+                }
+            } else {
+                current.append(c);
+            }
+        }
+        result.add(current.toString());
+        return result.toArray(new String[0]);
     }
 
     public String exportarParaCsv(String tipo, LocalDate inicio, LocalDate fim) {
@@ -607,6 +774,10 @@ public class RelatorioService {
                     .forEach(t -> sb.append(String.format("%s,%s,%s,%s,%s\n",
                         t.getTipo(), csvEscape(t.getDescricao()), t.getValor(),
                         csvEscape(t.getMetodoPagamento()), t.getData())));
+                gerarRelatorioDespesas(uid, ini, fim2).getDespesas()
+                    .forEach(t -> sb.append(String.format("%s,%s,%s,%s,%s\n",
+                        "DESPESA", csvEscape(t.getDescricao()), t.getValor(),
+                        csvEscape(t.getCategoria()), t.getData())));
             }
             case "clientes" -> {
                 sb.append("Cliente,Telefone,OS,Total Gasto\n");
@@ -616,11 +787,15 @@ public class RelatorioService {
                         c.getQuantidadeOs(), c.getTotalGasto())));
             }
             case "estoque" -> {
-                sb.append("Código,Nome,Categoria,Quantidade,Mínimo\n");
-                gerarRelatorioEstoqueBaixo(uid, 1000)
-                    .forEach(i -> sb.append(String.format("%s,%s,%s,%s,%s\n",
+                sb.append("Código,Nome,Categoria,Quantidade,Preço Custo,Preço Venda,Mínimo\n");
+                stockItemRepository.findByUsuarioIdAndAtivoTrueOrderByNomeAsc(uid)
+                    .forEach(i -> sb.append(String.format("%s,%s,%s,%s,%s,%s,%s\n",
                         csvEscape(i.getCodigo()), csvEscape(i.getNome()),
-                        csvEscape(i.getCategoria()), i.getQuantidadeAtual(), i.getQuantidadeMinima())));
+                        csvEscape(i.getCategoria()),
+                        i.getQuantidade() != null ? i.getQuantidade() : 0,
+                        i.getPrecoCusto() != null ? i.getPrecoCusto() : 0,
+                        i.getPrecoVenda() != null ? i.getPrecoVenda() : 0,
+                        i.getQuantidadeMinima() != null ? i.getQuantidadeMinima() : 0)));
             }
             default -> sb.append("Tipo de relatório não reconhecido: ").append(tipo).append("\n");
         }

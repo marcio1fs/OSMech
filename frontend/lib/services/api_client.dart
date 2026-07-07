@@ -129,6 +129,24 @@ class ApiClient {
     return response;
   }
 
+  /// Requisição Multipart (upload de arquivos) com autenticação.
+  Future<http.Response> multipart(String path, {required String fileField, required List<int> fileBytes, required String filename}) async {
+    _validateToken();
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers['Authorization'] = 'Bearer $token';
+    request.files.add(http.MultipartFile.fromBytes(
+      fileField,
+      fileBytes,
+      filename: filename,
+    ));
+
+    final streamedResponse = await request.send().timeout(_timeout, onTimeout: () => throw ApiTimeoutException());
+    final response = await http.Response.fromStream(streamedResponse);
+    _checkResponse(response);
+    return response;
+  }
+
   /// PATCH request com autenticação (atualizações parciais).
   Future<http.Response> patch(String path, {Object? body}) async {
     _validateToken();

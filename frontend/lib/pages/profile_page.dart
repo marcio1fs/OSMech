@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../mixins/auth_error_mixin.dart';
+import '../services/api_config.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/upper_text.dart';
+import '../utils/logo_picker.dart';
 
 /// Página de perfil do usuário — exibe e permite editar dados pessoais e senha.
 class ProfilePage extends StatefulWidget {
@@ -38,6 +40,7 @@ class _ProfilePageState extends State<ProfilePage> with AuthErrorMixin {
   String _plano = '';
   String _role = '';
   String _criadoEm = '';
+  String? _logoUrl;
 
   // Senha
   final _senhaAtualCtrl = TextEditingController();
@@ -50,6 +53,7 @@ class _ProfilePageState extends State<ProfilePage> with AuthErrorMixin {
   bool _showSenhaAtual = false;
   bool _showNovaSenha = false;
   bool _applyingMask = false;
+  bool _uploadingLogo = false;
 
   @override
   void initState() {
@@ -175,6 +179,7 @@ class _ProfilePageState extends State<ProfilePage> with AuthErrorMixin {
         _criadoEm = perfil['criadoEm'] != null
             ? perfil['criadoEm'].toString().substring(0, 10)
             : '';
+        _logoUrl = perfil['logoUrl'];
         _loading = false;
       });
     } catch (e) {
@@ -277,6 +282,36 @@ class _ProfilePageState extends State<ProfilePage> with AuthErrorMixin {
     }
   }
 
+  Future<void> _uploadLogo() async {
+    final picked = await pickLogoImage();
+    if (picked == null) return;
+
+    setState(() => _uploadingLogo = true);
+    try {
+      final service = UserService(token: safeToken);
+      final newUrl = await service.uploadLogo(picked.bytes, picked.filename);
+      setState(() {
+        _logoUrl = newUrl;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: UpperText('Logo atualizada com sucesso!', style: GoogleFonts.inter()),
+          backgroundColor: AppColors.success,
+        ));
+      }
+    } catch (e) {
+      if (handleAuthError(e)) return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: UpperText('$e', style: GoogleFonts.inter()),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingLogo = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -296,17 +331,45 @@ class _ProfilePageState extends State<ProfilePage> with AuthErrorMixin {
                 // Header
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 32,
-                      backgroundColor: AppColors.accent.withValues(alpha: 0.15),
-                      child: UpperText(
-                        (_nomeCtrl.text.isNotEmpty ? _nomeCtrl.text[0] : 'U')
-                            .toUpperCase(),
-                        style: GoogleFonts.inter(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
-                        ),
+                    InkWell(
+                      onTap: _uploadLogo,
+                      borderRadius: BorderRadius.circular(32),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 32,
+                            backgroundColor: AppColors.accent.withValues(alpha: 0.15),
+                            backgroundImage: _logoUrl != null && _logoUrl!.isNotEmpty
+                                ? NetworkImage(ApiConfig.absoluteUrl(_logoUrl!))
+                                : null,
+                            child: _logoUrl == null || _logoUrl!.isEmpty
+                                ? UpperText(
+                                    (_nomeCtrl.text.isNotEmpty ? _nomeCtrl.text[0] : 'U')
+                                        .toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.accent,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          if (_uploadingLogo)
+                            const CircularProgressIndicator(),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: AppColors.accent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 16),

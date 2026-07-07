@@ -13,7 +13,7 @@ export function Faq() {
         />
 
         <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-2">
-          {faqItems.map((item) => (
+          {faqItems.map((item: { question: string; answer: string }) => (
             <article
               key={item.question}
               className="rounded-3xl bg-slate-50 p-8 ring-1 ring-slate-200"

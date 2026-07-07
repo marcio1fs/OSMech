@@ -249,17 +249,17 @@ public class RelatorioController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim,
             @RequestParam(required = false) String formato) {
 
-        String csv = relatorioService.exportarParaCsv(tipo, inicio, fim);
-        String filename = String.format("relatorio_%s_%s.csv", tipo, LocalDate.now());
+        ByteArrayOutputStream out = relatorioService.exportarParaPdf(tipo, inicio, fim, formato);
+        String filename = String.format("relatorio_%s_%s.pdf", tipo, LocalDate.now());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(out.toByteArray());
     }
 
     /**
-     * Exporta relatório para Excel (gera CSV com dados reais)
+     * Exporta relatório para Excel
      */
     @GetMapping("/exportar/excel")
     public ResponseEntity<byte[]> exportarExcel(
@@ -267,13 +267,13 @@ public class RelatorioController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim) {
 
-        String csv = relatorioService.exportarParaCsv(tipo, inicio, fim);
-        String filename = String.format("relatorio_%s_%s.csv", tipo, LocalDate.now());
+        ByteArrayOutputStream out = relatorioService.exportarParaExcel(tipo, inicio, fim);
+        String filename = String.format("relatorio_%s_%s.xlsx", tipo, LocalDate.now());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(out.toByteArray());
     }
 
     /**

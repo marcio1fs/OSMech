@@ -12,10 +12,10 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Usuário não-root
-RUN addgroup -S osmech && adduser -S osmech -G osmech
+RUN addgroup -S osmech && adduser -S osmech -G osmech && mkdir -p /app/logs && chown -R osmech:osmech /app
 USER osmech
 
-COPY --from=build /build/target/*.jar app.jar
+COPY --chown=osmech:osmech --from=build /build/target/*.jar app.jar
 
 ENV SERVER_PORT=8080
 EXPOSE 8080

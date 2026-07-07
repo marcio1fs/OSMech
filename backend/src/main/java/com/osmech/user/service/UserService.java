@@ -11,6 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.UUID;
 
 /**
  * Serviço de gerenciamento de perfil do usuário.
@@ -22,6 +29,9 @@ public class UserService {
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.upload.logo-dir:/app/uploads/logos}")
+    private String logoDir;
 
     /**
      * Retorna o perfil do usuário logado.
@@ -104,6 +114,42 @@ public class UserService {
         log.info("Senha alterada para usuário: {}", email);
     }
 
+    /**
+     * Faz upload da logo do usuário.
+     */
+    @Transactional
+    public String uploadLogo(String email, MultipartFile file) throws Exception {
+        Usuario usuario = getUsuario(email);
+
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("Arquivo vazio");
+        }
+
+        // Criar o diretório se não existir
+        Path dir = Paths.get(logoDir).toAbsolutePath().normalize();
+        Files.createDirectories(dir);
+
+        // Gerar um nome único para o arquivo
+        String originalFilename = file.getOriginalFilename();
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+        String newFilename = "logo_" + usuario.getId() + "_" + UUID.randomUUID().toString() + extension;
+        Path targetLocation = dir.resolve(newFilename);
+
+        // Salvar o arquivo
+        Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+        // Construir a URL pública
+        String logoUrlPath = "/api/uploads/logos/" + newFilename;
+        usuario.setLogoUrl(logoUrlPath);
+        usuarioRepository.save(usuario);
+
+        log.info("Logo atualizada para usuário: {}", email);
+        return logoUrlPath;
+    }
+
     private Usuario getUsuario(String email) {
         return usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
@@ -125,6 +171,7 @@ public class UserService {
                 .enderecoEstado(usuario.getEnderecoEstado())
                 .enderecoCep(usuario.getEnderecoCep())
                 .siteOficina(usuario.getSiteOficina())
+                .logoUrl(usuario.getLogoUrl())
                 .role(usuario.getRole())
                 .plano(usuario.getPlano())
                 .ativo(usuario.getAtivo())

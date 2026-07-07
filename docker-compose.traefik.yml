@@ -34,4 +34,4 @@ services:
 
 networks:
   traefik-proxy:
-    driver: bridge
+    external: true

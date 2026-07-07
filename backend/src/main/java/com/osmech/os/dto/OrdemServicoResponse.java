@@ -33,6 +33,8 @@ public class OrdemServicoResponse {
     private String mecanicoResponsavel;
     private String pecas;
     private BigDecimal valor;
+    private BigDecimal descontoPercentual;
+    private BigDecimal valorFinal;
     private String status;
     private Boolean whatsappConsentimento;
     private LocalDateTime criadoEm;

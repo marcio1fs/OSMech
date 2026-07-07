@@ -18,6 +18,7 @@ public class MecanicoResponse {
     private Boolean ativo;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
+    private BigDecimal totalComissoes;
 
     public static MecanicoResponse fromEntity(Mecanico m) {
         return MecanicoResponse.builder()
@@ -29,6 +30,7 @@ public class MecanicoResponse {
                 .ativo(m.getAtivo())
                 .criadoEm(m.getCriadoEm())
                 .atualizadoEm(m.getAtualizadoEm())
+                .totalComissoes(BigDecimal.ZERO)
                 .build();
     }
 }

@@ -290,6 +290,9 @@ class _TransacaoFormPageState extends State<TransacaoFormPage>
                                   value: 'TRANSFERENCIA',
                                   child: UpperText('Transferência')),
                               DropdownMenuItem(
+                                  value: 'PRAZO_30_DIAS',
+                                  child: UpperText('A Prazo (30 dias)')),
+                              DropdownMenuItem(
                                   value: 'OUTRO', child: UpperText('Outro')),
                             ],
                             onChanged: (v) =>

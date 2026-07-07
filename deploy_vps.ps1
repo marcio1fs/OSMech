@@ -21,6 +21,8 @@ $transfers = @(
     "backend/src/main/java/com/osmech/auth/service/AuthService.java",
     "frontend/lib/pages/register_page.dart",
     "backend/src/main/java/com/osmech/os/controller/OsWhatsAppController.java",
+    "backend/src/main/java/com/osmech/os/service/OrdemServicoService.java",
+    "backend/src/main/resources/application.yml",
     "docker-compose.prod.yml",
     "nginx/nginx.conf"
 )

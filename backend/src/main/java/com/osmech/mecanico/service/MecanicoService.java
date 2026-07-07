@@ -5,6 +5,7 @@ import com.osmech.mecanico.dto.MecanicoRequest;
 import com.osmech.mecanico.dto.MecanicoResponse;
 import com.osmech.mecanico.entity.Mecanico;
 import com.osmech.mecanico.repository.MecanicoRepository;
+import com.osmech.os.repository.ServicoOSRepository;
 import com.osmech.user.entity.Usuario;
 import com.osmech.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,14 @@ public class MecanicoService {
 
     private final MecanicoRepository mecanicoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ServicoOSRepository servicoOSRepository;
+
+    private MecanicoResponse convertToResponse(Mecanico m) {
+        MecanicoResponse res = MecanicoResponse.fromEntity(m);
+        BigDecimal totalComissoes = servicoOSRepository.sumComissaoByMecanicoId(m.getId());
+        res.setTotalComissoes(totalComissoes != null ? totalComissoes : BigDecimal.ZERO);
+        return res;
+    }
 
     @Transactional
     public MecanicoResponse criar(String emailUsuario, MecanicoRequest request) {
@@ -42,7 +51,7 @@ public class MecanicoService {
 
             Mecanico salvo = mecanicoRepository.save(mecanico);
             log.info("Mecânico criado com ID: {}", salvo.getId());
-            return MecanicoResponse.fromEntity(salvo);
+            return convertToResponse(salvo);
         } catch (Exception e) {
             log.error("Erro ao criar mecánico: {}", e.getMessage(), e);
             throw e;
@@ -61,7 +70,7 @@ public class MecanicoService {
                     : mecanicoRepository.findByUsuarioIdOrderByNomeAsc(usuario.getId());
 
             log.debug("Mecanicos encontrados: {}", mecanicos.size());
-            return mecanicos.stream().map(MecanicoResponse::fromEntity).toList();
+            return mecanicos.stream().map(this::convertToResponse).toList();
         } catch (Exception e) {
             log.error("Erro ao listar mecanicos: {}", e.getMessage(), e);
             throw e;
@@ -72,7 +81,7 @@ public class MecanicoService {
     public MecanicoResponse buscarPorId(String emailUsuario, Long id) {
         Usuario usuario = getUsuario(emailUsuario);
         Mecanico mecanico = getMecanicoDoUsuario(usuario.getId(), id);
-        return MecanicoResponse.fromEntity(mecanico);
+        return convertToResponse(mecanico);
     }
 
     @Transactional
@@ -96,7 +105,7 @@ public class MecanicoService {
             mecanico.setAtivo(request.getAtivo());
         }
 
-        return MecanicoResponse.fromEntity(mecanicoRepository.save(mecanico));
+        return convertToResponse(mecanicoRepository.save(mecanico));
     }
 
     @Transactional

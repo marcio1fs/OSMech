@@ -9,6 +9,15 @@ spring:
   cloud:
     vault:
       enabled: ${SPRING_CLOUD_VAULT_ENABLED:false}
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 15MB
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/oficina_db}
@@ -47,6 +56,8 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION:86400000}  # 24 horas
+  upload:
+    logo-dir: ${UPLOAD_LOGO_DIR:uploads/logos}
 
 # Dev/local: não exigir configuração de envio de e-mail
 # (evita falha de startup quando JavaMailSender não está configurado)
@@ -64,6 +75,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    redis:
+      enabled: false
 
 # CORS
 cors:
@@ -72,16 +86,16 @@ cors:
 # Configuracao futura WhatsApp (Twilio / Meta)
 
 whatsapp:
-  enabled: false
+  enabled: ${WHATSAPP_ENABLED:false}
 
-  provider: twilio  # twilio | meta
+  provider: ${WHATSAPP_PROVIDER:twilio}  # twilio | meta
   twilio:
-    account-sid: ""
-    auth-token: ""
-    from-number: ""
+    account-sid: ${WHATSAPP_TWILIO_ACCOUNT_SID:}
+    auth-token: ${WHATSAPP_TWILIO_AUTH_TOKEN:}
+    from-number: ${WHATSAPP_TWILIO_FROM_NUMBER:}
   meta:
-    phone-number-id: ""
-    access-token: ""
+    phone-number-id: ${WHATSAPP_META_PHONE_NUMBER_ID:}
+    access-token: ${WHATSAPP_META_ACCESS_TOKEN:}
 
 # Configuracao futura IA (OpenAI)
 ai:
@@ -89,7 +103,7 @@ ai:
   provider: ${AI_PROVIDER:gemini}
   openai:
     api-key: ${AI_OPENAI_API_KEY:}
-    model: ${AI_OPENAI_MODEL:gemini-1.5-flash}
+    model: ${AI_OPENAI_MODEL:gemini-2.5-flash}
     base-url: ${AI_OPENAI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
 
 # Configuracao Mercado Pago (Checkout Pro)

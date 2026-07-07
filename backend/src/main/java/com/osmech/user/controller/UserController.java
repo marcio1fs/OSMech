@@ -42,4 +42,12 @@ public class UserController {
         userService.alterarSenha(auth.getName(), request);
         return ResponseEntity.ok(Map.of("message", "Senha alterada com sucesso"));
     }
+
+    /** POST /api/usuario/logo - Faz upload da logo da oficina */
+    @PostMapping("/logo")
+    public ResponseEntity<Map<String, String>> uploadLogo(Authentication auth,
+                                                          @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws Exception {
+        String logoUrl = userService.uploadLogo(auth.getName(), file);
+        return ResponseEntity.ok(Map.of("logoUrl", logoUrl));
+    }
 }

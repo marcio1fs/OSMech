@@ -109,30 +109,16 @@ class _RegisterPageState extends State<RegisterPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Icon(
-                            Icons.build_rounded,
-                            size: 42,
-                            color: Colors.white,
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Image.asset(
+                            'assets/logo.jpg',
+                            width: 240,
+                            height: 240,
+                            fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'OSMECH',
-                          style: GoogleFonts.inter(
-                            fontSize: 40,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 28),
                         Text(
                           'Gerencie sua oficina com\neficiência e praticidade',
                           textAlign: TextAlign.center,
@@ -172,7 +158,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Form(
                     key: _formKey,
-                    child: Column(
+                    child: AutofillGroup(
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Botão voltar
@@ -202,16 +189,15 @@ class _RegisterPageState extends State<RegisterPage> {
 
                         if (!isWide) ...[
                           Center(
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: AppColors.accent,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.build_rounded,
-                                  color: Colors.white, size: 24),
-                            ),
+                             child: ClipRRect(
+                             borderRadius: BorderRadius.circular(12),
+                             child: Image.asset(
+                               'assets/logo.jpg',
+                               width: 120,
+                               height: 120,
+                               fit: BoxFit.contain,
+                             ),
+                           ),
                           ),
                           const SizedBox(height: 24),
                         ],
@@ -239,6 +225,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _nomeController,
+                          autofillHints: const [AutofillHints.name],
                           decoration: const InputDecoration(
                             hintText: 'Seu nome completo',
                             prefixIcon:
@@ -256,6 +243,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
                           decoration: const InputDecoration(
                             hintText: 'seu@email.com',
                             prefixIcon:
@@ -280,6 +268,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         TextFormField(
                           controller: _senhaController,
                           obscureText: _obscurePassword,
+                          autofillHints: const [AutofillHints.password],
                           decoration: InputDecoration(
                             hintText: 'Mínimo 8 caracteres',
                             prefixIcon: const Icon(Icons.lock_outline_rounded,
@@ -312,6 +301,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         TextFormField(
                           controller: _telefoneController,
                           keyboardType: TextInputType.phone,
+                          autofillHints: const [AutofillHints.telephoneNumber],
                           decoration: const InputDecoration(
                             hintText: '(11) 99999-9999',
                             prefixIcon: Icon(Icons.phone_outlined, size: 20),
@@ -385,6 +375,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       ],
                     ),
                   ),
+                ),
                 ),
               ),
             ),

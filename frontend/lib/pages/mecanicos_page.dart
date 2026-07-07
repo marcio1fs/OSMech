@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../mixins/auth_error_mixin.dart';
 import '../services/mecanico_service.dart';
+import '../services/os_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
 import '../widgets/upper_text.dart';
 
 class MecanicosPage extends StatefulWidget {
@@ -322,6 +324,32 @@ class _MecanicosPageState extends State<MecanicosPage> with AuthErrorMixin {
                                             '${m['especialidade'] ?? 'Sem especialidade'} • ${m['telefone'] ?? 'Sem telefone'} • Comissao: ${m['percentualComissao'] ?? 0}%',
                                             style: GoogleFonts.inter(fontSize: 12),
                                           ),
+                                          const SizedBox(height: 6),
+                                          InkWell(
+                                            onTap: () => _verDetalheComissao(m),
+                                            borderRadius: BorderRadius.circular(6),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.monetization_on_outlined, size: 14, color: AppColors.success),
+                                                  const SizedBox(width: 4),
+                                                  UpperText(
+                                                    'Comissões Acumuladas: ${formatCurrency(m['totalComissoes'] ?? 0)}',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: AppColors.success,
+                                                      decoration: TextDecoration.underline,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  const Icon(Icons.open_in_new_rounded, size: 12, color: AppColors.success),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -382,6 +410,215 @@ class _MecanicosPageState extends State<MecanicosPage> with AuthErrorMixin {
                       ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _verDetalheComissao(Map<String, dynamic> mecanico) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: CircularProgressIndicator(color: AppColors.accent),
+      ),
+    );
+
+    List<Map<String, dynamic>> servicosRealizados = [];
+    double totalAcumuladoCalculado = 0;
+
+    try {
+      final osService = OsService(token: safeToken);
+      final ordens = await osService.listar();
+
+      final idMecanico = mecanico['id'];
+
+      for (var os in ordens) {
+        if (os['status'] != 'CONCLUIDA') continue;
+
+        final listServicos = os['servicos'] as List?;
+        if (listServicos == null) continue;
+
+        for (var s in listServicos) {
+          if (s['mecanicoId'] == idMecanico) {
+            final qty = int.tryParse(s['quantidade']?.toString() ?? '1') ?? 1;
+            final valUnit = double.tryParse(s['valorUnitario']?.toString() ?? '0') ?? 0.0;
+            final pctComissao = double.tryParse(s['percentualComissao']?.toString() ?? '0') ?? 0.0;
+            final valorComissao = (qty * valUnit) * (pctComissao / 100);
+
+            servicosRealizados.add({
+              'osId': os['id'],
+              'clienteNome': os['clienteNome'] ?? 'Consumidor Final',
+              'placa': os['placa'] ?? 'BALCAO',
+              'concluidoEm': os['concluidoEm'],
+              'descricao': s['descricao'] ?? 'Serviço',
+              'quantidade': qty,
+              'valorUnitario': valUnit,
+              'percentualComissao': pctComissao,
+              'valorComissao': valorComissao,
+            });
+            totalAcumuladoCalculado += valorComissao;
+          }
+        }
+      }
+
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: UpperText(
+              'Serviços Realizados - ${mecanico['nome']}',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+            content: SizedBox(
+              width: 600,
+              child: servicosRealizados.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.info_outline_rounded, size: 48, color: AppColors.textMuted),
+                            const SizedBox(height: 12),
+                            UpperText(
+                              'Nenhum serviço concluído foi encontrado para este mecânico.',
+                              style: GoogleFonts.inter(color: AppColors.textSecondary),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: SingleChildScrollView(
+                            child: Table(
+                              columnWidths: const {
+                                0: FlexColumnWidth(1.2),
+                                1: FlexColumnWidth(1.8),
+                                2: FlexColumnWidth(3.5),
+                                3: FlexColumnWidth(2),
+                              },
+                              border: TableBorder(
+                                horizontalInside: BorderSide(
+                                    color: AppColors.border.withValues(alpha: 0.5)),
+                              ),
+                              children: [
+                                TableRow(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  children: [
+                                    _dialogTableHeader('OS'),
+                                    _dialogTableHeader('Data'),
+                                    _dialogTableHeader('Serviço'),
+                                    _dialogTableHeader('Comissão'),
+                                  ],
+                                ),
+                                ...servicosRealizados.map((s) {
+                                  return TableRow(
+                                    children: [
+                                      _dialogTableCell('#${s['osId']}'),
+                                      _dialogTableCell(formatDateBR(s['concluidoEm'])),
+                                      _dialogTableCell(
+                                        '${s['descricao']}\n(${s['clienteNome']} • ${s['placa']})',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      _dialogTableCell(
+                                        '${formatCurrency(s['valorComissao'])}\n(${s['percentualComissao'].toStringAsFixed(0)}%)',
+                                        color: AppColors.success,
+                                        bold: true,
+                                      ),
+                                    ],
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              UpperText(
+                                'Total em comissões:',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                              ),
+                              UpperText(
+                                formatCurrency(totalAcumuladoCalculado),
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.success,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const UpperText('Fechar'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      
+      if (!handleAuthError(e) && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: UpperText('Erro ao carregar comissões: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _dialogTableHeader(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      child: UpperText(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _dialogTableCell(String text, {Color? color, bool bold = false, TextStyle? style}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      child: UpperText(
+        text,
+        style: style ?? GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+          color: color ?? AppColors.textPrimary,
+        ),
       ),
     );
   }

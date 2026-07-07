@@ -217,6 +217,31 @@ class AppTheme {
         dataTextStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
         dividerThickness: 0.5,
       ),
+      // NavigationBar
+      navigationBarTheme: NavigationBarThemeData(
+        height: 66,
+        backgroundColor: AppColors.surface,
+        indicatorColor: AppColors.accent.withValues(alpha: 0.15),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            );
+          }
+          return GoogleFonts.inter(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.primary, size: 20);
+          }
+          return const IconThemeData(color: AppColors.textSecondary, size: 20);
+        }),
+      ),
       // TabBar
       tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,

@@ -60,10 +60,6 @@ public class OsWhatsAppController {
             throw new IllegalArgumentException("Acesso negado a esta Ordem de Servico");
         }
 
-        if (!Boolean.TRUE.equals(os.getWhatsappConsentimento())) {
-            return ResponseEntity.badRequest().body(
-                    java.util.Map.of("error", "Cliente nao autorizou envio de mensagens via WhatsApp"));
-        }
 
         String telefoneWhatsapp = request.getTelefoneWhatsapp();
         if (telefoneWhatsapp == null || telefoneWhatsapp.isBlank()) {
@@ -116,8 +112,13 @@ public class OsWhatsAppController {
         NumberFormat moeda = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         StringBuilder sb = new StringBuilder();
 
+        boolean isOrçamento = !"CONCLUIDA".equals(os.getStatus());
         sb.append("========================================\n");
-        sb.append("            RECIBO - ORDEM DE SERVICO\n");
+        if (isOrçamento) {
+            sb.append("          ORÇAMENTO - ORDEM DE SERVICO\n");
+        } else {
+            sb.append("            RECIBO - ORDEM DE SERVICO\n");
+        }
         sb.append("========================================\n\n");
 
         sb.append("OFICINA: ").append(defaultText(usuario.getNomeOficina())).append("\n");
@@ -209,9 +210,20 @@ public class OsWhatsAppController {
                     .append(moeda.format(descontoValor))
                     .append("\n");
         }
-        sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorFinal)).append("\n");
+        if (isOrçamento) {
+            sb.append("TOTAL ESTIMADO: ").append(moeda.format(valorFinal)).append("\n");
+        } else {
+            sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorFinal)).append("\n");
+        }
         sb.append("========================================\n");
-        sb.append("Obrigado pela preferencia.");
+        if (isOrçamento) {
+            sb.append("Este documento é apenas um orçamento preliminar.\n");
+            sb.append("Valores sujeitos a alteração.\n");
+        } else {
+            sb.append("Obrigado pela preferencia.\n\n");
+            sb.append("Agradecemos pela confiança e preferência!\n");
+            sb.append("Seu veículo em boas mãos. Volte sempre!");
+        }
         return sb.toString();
     }
 

@@ -53,10 +53,17 @@ services:
       AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
       AI_OPENAI_MODEL: ${AI_OPENAI_MODEL:-gemini-1.5-flash}
       AI_OPENAI_BASE_URL: ${AI_OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-twilio}
+      WHATSAPP_TWILIO_ACCOUNT_SID: ${WHATSAPP_TWILIO_ACCOUNT_SID:-}
+      WHATSAPP_TWILIO_AUTH_TOKEN: ${WHATSAPP_TWILIO_AUTH_TOKEN:-}
+      WHATSAPP_TWILIO_FROM_NUMBER: ${WHATSAPP_TWILIO_FROM_NUMBER:-}
+      WHATSAPP_META_PHONE_NUMBER_ID: ${WHATSAPP_META_PHONE_NUMBER_ID:-}
+      WHATSAPP_META_ACCESS_TOKEN: ${WHATSAPP_META_ACCESS_TOKEN:-}
     networks:
       - osmech-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/actuator/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,15 +77,40 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
+    # ports:
+    #   - "80:80"
+    #   - "443:443"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.services.osmech.loadbalancer.server.port=80"
+      - "traefik.http.routers.osmech.rule=Host(`osmech.com.br`) || Host(`www.osmech.com.br`) || Host(`app.osmech.com.br`)"
+      - "traefik.http.routers.osmech.entrypoints=websecure"
+      - "traefik.http.routers.osmech.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.osmech.middlewares=redirect-to-www"
+      - "traefik.http.routers.osmech-api.rule=(Host(`osmech.com.br`) || Host(`www.osmech.com.br`) || Host(`app.osmech.com.br`)) && (PathPrefix(`/api/`) || PathPrefix(`/api/api/`))"
+      - "traefik.http.routers.osmech-api.entrypoints=websecure"
+      - "traefik.http.routers.osmech-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.osmech-api.priority=1000"
+      - "traefik.http.middlewares.redirect-to-www.redirectregex.regex=^https?://osmech.com.br/(.*)"
+      - "traefik.http.middlewares.redirect-to-www.redirectregex.replacement=https://www.osmech.com.br/$${1}"
+      - "traefik.http.middlewares.redirect-to-www.redirectregex.permanent=true"
+      - "traefik.http.routers.osmech-http.rule=Host(`osmech.com.br`) || Host(`www.osmech.com.br`) || Host(`app.osmech.com.br`)"
+      - "traefik.http.routers.osmech-http.entrypoints=web"
+      - "traefik.http.routers.osmech-http.middlewares=redirect-https"
+      - "traefik.http.routers.osmech-api-http.rule=(Host(`osmech.com.br`) || Host(`www.osmech.com.br`) || Host(`app.osmech.com.br`)) && (PathPrefix(`/api/`) || PathPrefix(`/api/api/`))"
+      - "traefik.http.routers.osmech-api-http.entrypoints=web"
+      - "traefik.http.routers.osmech-api-http.middlewares=redirect-https"
+      - "traefik.http.routers.osmech-api-http.priority=1000"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend/build/web:/usr/share/nginx/html:ro
+      - /var/www/osmech.com.br:/var/www/osmech.com.br:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
     networks:
       - osmech-net
+      - traefik-proxy
 
 volumes:
   postgres_data:
@@ -86,3 +118,5 @@ volumes:
 networks:
   osmech-net:
     driver: bridge
+  traefik-proxy:
+    external: true

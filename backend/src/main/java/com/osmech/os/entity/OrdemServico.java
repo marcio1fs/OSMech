@@ -104,6 +104,14 @@ public class OrdemServico {
     @Builder.Default
     private List<ItemOS> itens = new ArrayList<>();
 
+    @Column(name = "desconto_percentual", precision = 5, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal descontoPercentual = BigDecimal.ZERO;
+
+    @Column(name = "valor_final", precision = 10, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal valorFinal = BigDecimal.ZERO;
+
     @Column(name = "criado_em", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime criadoEm = LocalDateTime.now();

@@ -1,5 +1,5 @@
-export const appUrl = "https://app.osmech.com.br";
-export const siteUrl = "https://osmech.com.br";
+export const appUrl = "https://www.osmech.com.br/app";
+export const siteUrl = "https://www.osmech.com.br";
 export const whatsappNumber = "5577988849278";
 
 export const navLinks = [
@@ -125,3 +125,47 @@ export const stats = [
   { value: "100%", label: "Online, sem instalação, acessível de qualquer dispositivo" },
   { value: "R$0", label: "Sem taxa de setup ou fidelidade para começar" }
 ];
+
+export const faqItems = [
+  {
+    question: "O OSMech funciona em qualquer dispositivo?",
+    answer: "Sim! Por ser uma plataforma 100% online, você pode acessar de celulares, tablets ou computadores sem precisar instalar nada."
+  },
+  {
+    question: "Preciso de fidelidade ou contrato de longo prazo?",
+    answer: "Não. Você pode cancelar ou alterar seu plano a qualquer momento sem nenhuma multa ou taxa de cancelamento."
+  },
+  {
+    question: "Meus dados e histórico de clientes estão seguros?",
+    answer: "Sim. Usamos criptografia de ponta e servidores seguros para garantir que todas as suas informações fiquem totalmente protegidas."
+  },
+  {
+    question: "Como funciona o suporte?",
+    answer: "Oferecemos suporte completo por e-mail e WhatsApp, com atendimento prioritário para planos pagos de acordo com a sua contratação."
+  }
+];
+
+export const productShowcase = {
+  eyebrow: "Demonstração",
+  title: "Simples, rápido e intuitivo",
+  description: "Conheça algumas das principais telas do sistema desenhadas para facilitar o seu dia a dia."
+};
+
+export const productShots = [
+  {
+    title: "Painel Principal",
+    description: "Visão geral do faturamento mensal, ordens de serviço ativas e alertas de estoque.",
+    src: "/images/dashboard-preview.png"
+  },
+  {
+    title: "Ordens de Serviço",
+    description: "Criação e gerenciamento completo de serviços, peças aplicadas e fechamento rápido.",
+    src: "/images/os-preview.png"
+  },
+  {
+    title: "Controle de Estoque",
+    description: "Cadastro de peças, alertas de estoque baixo e histórico de movimentações.",
+    src: "/images/stock-preview.png"
+  }
+];
+

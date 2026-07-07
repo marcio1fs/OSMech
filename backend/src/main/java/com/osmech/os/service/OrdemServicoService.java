@@ -110,6 +110,8 @@ public class OrdemServicoService {
                 .mecanicoResponsavel(resolverMecanicoResponsavel(request.getMecanicoResponsavel(), usuario))
                 .pecas(request.getPecas())
                 .valor(request.getValor() != null ? request.getValor() : BigDecimal.ZERO)
+                .descontoPercentual(BigDecimal.ZERO)
+                .valorFinal(request.getValor() != null ? request.getValor() : BigDecimal.ZERO)
                 .status("ABERTA")
                 .whatsappConsentimento(request.getWhatsappConsentimento() != null ? request.getWhatsappConsentimento() : false)
                 .build();
@@ -299,7 +301,18 @@ public class OrdemServicoService {
             throw new IllegalArgumentException("OS cancelada nao pode ser encerrada");
         }
 
+        // Calcula desconto (0–10%)
+        BigDecimal descontoPerc = request.getDescontoPercentual() != null
+                ? request.getDescontoPercentual().min(BigDecimal.TEN).max(BigDecimal.ZERO)
+                : BigDecimal.ZERO;
+        BigDecimal valorOriginal = os.getValor() != null ? os.getValor() : BigDecimal.ZERO;
+        BigDecimal valorDesconto = valorOriginal.multiply(descontoPerc)
+                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal valorFinal = valorOriginal.subtract(valorDesconto);
+
         os.setStatus("CONCLUIDA");
+        os.setDescontoPercentual(descontoPerc);
+        os.setValorFinal(valorFinal);
         os = osRepository.save(os);
 
         List<ServicoOS> servicos = servicoOSRepository.findByOrdemServicoId(os.getId());
@@ -311,15 +324,6 @@ public class OrdemServicoService {
         }
         metodoPagamento = metodoPagamento.trim().toUpperCase();
         TransacaoResponse transacao = null;
-
-        // Calcula desconto (0–10%)
-        BigDecimal descontoPerc = request.getDescontoPercentual() != null
-                ? request.getDescontoPercentual().min(BigDecimal.TEN).max(BigDecimal.ZERO)
-                : BigDecimal.ZERO;
-        BigDecimal valorOriginal = os.getValor() != null ? os.getValor() : BigDecimal.ZERO;
-        BigDecimal valorDesconto = valorOriginal.multiply(descontoPerc)
-                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-        BigDecimal valorFinal = valorOriginal.subtract(valorDesconto);
 
         boolean jaTemTransacaoOs = transacaoFinanceiraRepository
                 .existsByUsuarioIdAndReferenciaTipoAndReferenciaIdAndEstornoFalse(usuario.getId(), "OS", os.getId());
@@ -338,6 +342,25 @@ public class OrdemServicoService {
             transacaoRequest.setMetodoPagamento(metodoPagamento);
             transacaoRequest.setObservacoes(request.getObservacoesPagamento());
             transacao = financeiroService.criarTransacao(emailUsuario, transacaoRequest);
+        } else if (jaTemTransacaoOs) {
+            List<com.osmech.finance.entity.TransacaoFinanceira> transacoesExistentes = transacaoFinanceiraRepository
+                    .findByUsuarioIdAndReferenciaTipoAndReferenciaId(usuario.getId(), "OS", os.getId());
+            for (com.osmech.finance.entity.TransacaoFinanceira tf : transacoesExistentes) {
+                if (!Boolean.TRUE.equals(tf.getEstorno())) {
+                    tf.setValor(valorFinal);
+                    tf.setMetodoPagamento(metodoPagamento);
+                    String descricao = "Recebimento OS #" + os.getId() + " - " + os.getClienteNome();
+                    if (descontoPerc.signum() > 0) {
+                        descricao += " (desconto " + descontoPerc.stripTrailingZeros().toPlainString() + "%)";
+                    }
+                    tf.setDescricao(descricao);
+                    if (request.getObservacoesPagamento() != null) {
+                        tf.setObservacoes(request.getObservacoesPagamento());
+                    }
+                    transacaoFinanceiraRepository.save(tf);
+                    financeiroService.atualizarFluxoCaixa(usuario.getId(), tf.getDataMovimentacao().toLocalDate());
+                }
+            }
         }
 
         String recibo = montarReciboExtrato(usuario, os, servicos, itens, metodoPagamento, transacao);
@@ -348,21 +371,17 @@ public class OrdemServicoService {
         String whatsappDetalhe = "Envio nao solicitado";
 
         if (enviarWhatsapp) {
-            if (!Boolean.TRUE.equals(os.getWhatsappConsentimento())) {
-                whatsappDetalhe = "Cliente sem consentimento de WhatsApp nesta OS";
-            } else {
-                whatsappDestino = request.getTelefoneWhatsapp() != null && !request.getTelefoneWhatsapp().isBlank()
-                        ? request.getTelefoneWhatsapp()
-                        : os.getClienteTelefone();
+            whatsappDestino = request.getTelefoneWhatsapp() != null && !request.getTelefoneWhatsapp().isBlank()
+                    ? request.getTelefoneWhatsapp()
+                    : os.getClienteTelefone();
 
-                if (whatsappDestino == null || whatsappDestino.isBlank()) {
-                    whatsappDetalhe = "Telefone do cliente nao informado";
-                } else {
-                    WhatsAppService.ResultadoEnvio resultado = whatsAppService.enviarMensagem(whatsappDestino, recibo);
-                    whatsappEnviado = resultado.enviado();
-                    whatsappDestino = resultado.destino();
-                    whatsappDetalhe = resultado.detalhe();
-                }
+            if (whatsappDestino == null || whatsappDestino.isBlank()) {
+                whatsappDetalhe = "Telefone do cliente nao informado";
+            } else {
+                WhatsAppService.ResultadoEnvio resultado = whatsAppService.enviarMensagem(whatsappDestino, recibo);
+                whatsappEnviado = resultado.enviado();
+                whatsappDestino = resultado.destino();
+                whatsappDetalhe = resultado.detalhe();
             }
         }
 
@@ -552,6 +571,8 @@ public class OrdemServicoService {
                 .mecanicoResponsavel(os.getMecanicoResponsavel())
                 .pecas(os.getPecas())
                 .valor(os.getValor())
+                .descontoPercentual(os.getDescontoPercentual())
+                .valorFinal(os.getValorFinal())
                 .status(os.getStatus())
                 .whatsappConsentimento(os.getWhatsappConsentimento())
                 .criadoEm(os.getCriadoEm())
@@ -630,7 +651,18 @@ public class OrdemServicoService {
         sb.append("RESUMO FINANCEIRO").append("\n");
         sb.append("SERVIÇOS: ").append(moeda.format(totalServicos)).append("\n");
         sb.append("PEÇAS: ").append(moeda.format(totalPecas)).append("\n");
-        sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorTotal)).append("\n");
+        sb.append("VALOR TOTAL: ").append(moeda.format(valorTotal)).append("\n");
+
+        BigDecimal descPerc = os.getDescontoPercentual() != null ? os.getDescontoPercentual() : BigDecimal.ZERO;
+        if (descPerc.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal valorDesconto = valorTotal.multiply(descPerc)
+                    .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+            BigDecimal valorFinal = valorTotal.subtract(valorDesconto);
+            sb.append("DESCONTO (").append(descPerc.stripTrailingZeros().toPlainString()).append("%): -").append(moeda.format(valorDesconto)).append("\n");
+            sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorFinal)).append("\n");
+        } else {
+            sb.append("TOTAL RECEBIDO: ").append(moeda.format(valorTotal)).append("\n");
+        }
         sb.append("MÉTODO: ").append(defaultText(metodoPagamento)).append("\n");
         sb.append("OS: #").append(os.getId()).append("\n");
         if (transacao != null) {
@@ -639,7 +671,9 @@ public class OrdemServicoService {
         sb.append("STATUS OS: ").append(defaultText(os.getStatus())).append("\n");
         sb.append("DATA/HORA: ").append(dataHora).append("\n");
         sb.append("====================================").append("\n");
-        sb.append("Comprovante gerado automaticamente.");
+        sb.append("Comprovante gerado automaticamente.\n\n");
+        sb.append("Agradecemos pela confiança e preferência!\n");
+        sb.append("Seu veículo em boas mãos. Volte sempre!");
 
         return sb.toString();
     }
@@ -847,7 +881,14 @@ public class OrdemServicoService {
             BigDecimal totalItens = hasItens ?
                     itens.stream().map(ItemOS::getValorTotal).reduce(BigDecimal.ZERO, BigDecimal::add)
                     : BigDecimal.ZERO;
-            os.setValor(totalServicos.add(totalItens));
+            BigDecimal total = totalServicos.add(totalItens);
+            os.setValor(total);
+
+            // Recalcular valor final com base no desconto
+            BigDecimal descontoPerc = os.getDescontoPercentual() != null ? os.getDescontoPercentual() : BigDecimal.ZERO;
+            BigDecimal valorDesconto = total.multiply(descontoPerc)
+                    .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+            os.setValorFinal(total.subtract(valorDesconto));
 
             // Atualizar campo pecas com resumo dos itens
             if (hasItens) {

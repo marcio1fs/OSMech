@@ -25,6 +25,7 @@ public class UserProfileResponse {
     private String enderecoEstado;
     private String enderecoCep;
     private String siteOficina;
+    private String logoUrl;
     private String role;
     private String plano;
     private Boolean ativo;

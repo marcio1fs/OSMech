@@ -79,30 +79,16 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Icon(
-                            Icons.build_rounded,
-                            size: 42,
-                            color: Colors.white,
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Image.asset(
+                            'assets/logo.jpg',
+                            width: 240,
+                            height: 240,
+                            fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'OSMECH',
-                          style: GoogleFonts.inter(
-                            fontSize: 40,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 28),
                         Text(
                           'Sistema de Ordens de Serviço\npara Oficinas Mecânicas',
                           textAlign: TextAlign.center,
@@ -133,7 +119,8 @@ class _LoginPageState extends State<LoginPage> {
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Form(
                     key: _formKey,
-                    child: Column(
+                    child: AutofillGroup(
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -142,26 +129,13 @@ class _LoginPageState extends State<LoginPage> {
                           Center(
                             child: Column(
                               children: [
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accent,
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(
-                                    Icons.build_rounded,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'OSMECH',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.primary,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.asset(
+                                    'assets/logo.jpg',
+                                    width: 140,
+                                    height: 140,
+                                    fit: BoxFit.contain,
                                   ),
                                 ),
                               ],
@@ -202,6 +176,7 @@ class _LoginPageState extends State<LoginPage> {
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
                           decoration: const InputDecoration(
                             hintText: 'seu@email.com',
                             prefixIcon:
@@ -233,6 +208,7 @@ class _LoginPageState extends State<LoginPage> {
                         TextFormField(
                           controller: _senhaController,
                           obscureText: _obscurePassword,
+                          autofillHints: const [AutofillHints.password],
                           decoration: InputDecoration(
                             hintText: '••••••••',
                             prefixIcon: const Icon(Icons.lock_outline_rounded,
@@ -331,6 +307,7 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                   ),
+                ),
                 ),
               ),
             ),

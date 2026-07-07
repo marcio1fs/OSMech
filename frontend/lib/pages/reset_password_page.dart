@@ -82,10 +82,12 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                child: Form(
+                  child: AutofillGroup(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                     const Icon(Icons.vpn_key_rounded, size: 48, color: AppColors.accent),
                     const SizedBox(height: 16),
                     UpperText('Nova Senha',
@@ -109,7 +111,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: AppColors.error.withOpacity(0.1),
+                            color: AppColors.error.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: UpperText(_error!,
@@ -117,6 +119,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                         ),
                       TextField(
                         controller: _passwordController,
+                        autofillHints: const [AutofillHints.newPassword],
                         decoration: const InputDecoration(
                           labelText: 'Nova Senha',
                           prefixIcon: Icon(Icons.lock_outline),
@@ -126,6 +129,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: _confirmPasswordController,
+                        autofillHints: const [AutofillHints.newPassword],
                         decoration: const InputDecoration(
                           labelText: 'Confirmar Nova Senha',
                           prefixIcon: Icon(Icons.lock_outline),
@@ -142,6 +146,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     ],
                   ],
                 ),
+              ),
+              ),
               ),
             ),
           ),

@@ -42,7 +42,7 @@ export function ProductShowcase() {
           </article>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {gridShots.map((shot) => (
+             {gridShots.map((shot: { title: string; description: string; src: string }) => (
               <article
                 key={shot.src}
                 className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-50 shadow-sm"

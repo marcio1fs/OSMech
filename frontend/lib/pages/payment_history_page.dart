@@ -195,6 +195,8 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage>
         return 'Boleto';
       case 'TRANSFERENCIA':
         return 'Transferência';
+      case 'PRAZO_30_DIAS':
+        return 'A Prazo (30 dias)';
       default:
         return metodo ?? '-';
     }
